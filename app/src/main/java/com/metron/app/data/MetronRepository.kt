@@ -3,6 +3,8 @@ package com.metron.app.data
 import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import com.metron.app.model.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -556,9 +558,49 @@ class MetronRepository(val context: Context) {
             val dir = java.io.File(context.filesDir, "receipts")
             if (!dir.exists()) dir.mkdirs()
             val file = java.io.File(dir, "receipt_${System.currentTimeMillis()}.jpg")
-            file.outputStream().use { out ->
-                inputStream.copyTo(out)
+
+            val bytes = inputStream.readBytes()
+            val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, boundsOptions)
+
+            val maxDimension = 1600
+            val rawW = boundsOptions.outWidth
+            val rawH = boundsOptions.outHeight
+
+            var inSampleSize = 1
+            if (rawW > maxDimension || rawH > maxDimension) {
+                val halfW = rawW / 2
+                val halfH = rawH / 2
+                while ((halfW / inSampleSize) >= maxDimension && (halfH / inSampleSize) >= maxDimension) {
+                    inSampleSize *= 2
+                }
             }
+
+            val decodeOptions = BitmapFactory.Options().apply {
+                this.inSampleSize = inSampleSize
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            val sampledBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions) ?: return null
+
+            // Fine downsample if still larger than maxDimension
+            val scale = minOf(maxDimension.toFloat() / sampledBitmap.width, maxDimension.toFloat() / sampledBitmap.height, 1.0f)
+            val finalBitmap = if (scale < 1.0f) {
+                val targetW = (sampledBitmap.width * scale).toInt().coerceAtLeast(1)
+                val targetH = (sampledBitmap.height * scale).toInt().coerceAtLeast(1)
+                Bitmap.createScaledBitmap(sampledBitmap, targetW, targetH, true)
+            } else {
+                sampledBitmap
+            }
+
+            file.outputStream().use { out ->
+                finalBitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
+            }
+
+            if (finalBitmap != sampledBitmap) {
+                sampledBitmap.recycle()
+            }
+            finalBitmap.recycle()
+
             file.absolutePath
         } catch (e: Exception) {
             e.printStackTrace()

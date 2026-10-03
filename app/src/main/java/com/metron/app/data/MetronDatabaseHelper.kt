@@ -206,7 +206,6 @@ class MetronDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABAS
             "currency_symbol" to "₹",
             "theme_mode" to "AEGEAN_DARK",
             "calm_mode" to "0",
-            "biometric_enabled" to "0",
             "onboarding_completed" to "0", // 0 triggers the first-timer interactive guided tour!
             "haptics_enabled" to "1",
             "notifications_enabled" to "1",
