@@ -199,8 +199,12 @@ fun TransactionsScreen(
                         todayDateStr -> "Today"
                         yesterdayDateStr -> "Yesterday"
                         else -> {
-                            val parsed = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dateKey)
-                            if (parsed != null) displayDateFormat.format(parsed) else dateKey
+                            try {
+                                val parsed = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dateKey)
+                                if (parsed != null) displayDateFormat.format(parsed) else dateKey
+                            } catch (e: Exception) {
+                                dateKey
+                            }
                         }
                     }
 

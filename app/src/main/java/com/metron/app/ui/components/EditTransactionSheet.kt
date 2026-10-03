@@ -203,7 +203,7 @@ fun EditTransactionSheet(
 
             if (!receiptPath.isNullOrBlank() && File(receiptPath!!).exists()) {
                 val bitmap = remember(receiptPath) {
-                    BitmapFactory.decodeFile(receiptPath)
+                    com.metron.app.util.ImageUtils.loadThumbnail(receiptPath, 240)
                 }
                 if (bitmap != null) {
                     Box(modifier = Modifier.size(120.dp).clip(RoundedCornerShape(12.dp))) {
@@ -239,15 +239,16 @@ fun EditTransactionSheet(
 
             Button(
                 onClick = {
-                    val amt = amountString.toDoubleOrNull() ?: transaction.amount
+                    val rawAmt = amountString.toDoubleOrNull() ?: transaction.amount
+                    val amt = com.metron.app.util.MoneyUtils.round(rawAmt)
                     if (amt > 0 && selectedCategory != null && selectedAccount != null) {
                         HapticsManager.success()
                         val updated = transaction.copy(
                             amount = amt,
-                            merchant = merchantText.ifBlank { selectedCategory!!.name },
+                            merchant = merchantText.trim().take(100).ifBlank { selectedCategory!!.name },
                             categoryId = selectedCategory!!.id,
                             accountId = selectedAccount!!.id,
-                            notes = notesText,
+                            notes = notesText.trim().take(500),
                             receiptPath = receiptPath
                         )
                         onUpdateTransaction(updated)

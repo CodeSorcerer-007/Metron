@@ -735,7 +735,7 @@ fun VaultScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "v1.1.0 • 100% Offline & Private",
+                        text = "v1.2.0 • 100% Offline & Private",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
@@ -925,13 +925,20 @@ fun VaultScreen(
             },
             confirmButton = {
                 Button(onClick = {
-                    if (importInputString.isNotBlank()) {
-                        val success = onImportJson(importInputString)
+                    val trimmed = importInputString.trim()
+                    if (trimmed.isNotBlank()) {
+                        val success = if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+                            onImportJson(trimmed)
+                        } else {
+                            repo.importFromCsv(trimmed)
+                        }
                         if (success) {
+                            HapticsManager.success()
                             Toast.makeText(context, "Database restored successfully!", Toast.LENGTH_SHORT).show()
                             showImportDialog = false
+                            importInputString = ""
                         } else {
-                            Toast.makeText(context, "Invalid JSON format", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Invalid format. Ensure valid JSON or CSV backup.", Toast.LENGTH_SHORT).show()
                         }
                     }
                 }) {
@@ -971,17 +978,20 @@ fun VaultScreen(
             },
             confirmButton = {
                 Button(onClick = {
-                    val bal = accBalText.toDoubleOrNull() ?: 0.0
-                    if (accNameText.isNotBlank()) {
+                    val rawBal = accBalText.toDoubleOrNull() ?: 0.0
+                    val bal = com.metron.app.util.MoneyUtils.round(rawBal.coerceAtLeast(0.0))
+                    val trimmedName = accNameText.trim().take(40)
+                    if (trimmedName.isNotBlank()) {
                         onAddAccount(
                             Account(
-                                name = accNameText,
+                                name = trimmedName,
                                 type = accType,
                                 initialBalance = bal,
                                 colorHex = "#38BDF8",
                                 iconName = "AccountBalance"
                             )
                         )
+                        HapticsManager.click()
                     }
                     showAddAccountDialog = false
                 }) {

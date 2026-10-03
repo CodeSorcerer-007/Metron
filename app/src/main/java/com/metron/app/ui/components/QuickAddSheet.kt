@@ -518,7 +518,7 @@ fun QuickAddSheet(
                     // Receipt attachment button / preview
                     if (!receiptPath.isNullOrBlank() && File(receiptPath!!).exists()) {
                         val bitmap = remember(receiptPath) {
-                            BitmapFactory.decodeFile(receiptPath)
+                            com.metron.app.util.ImageUtils.loadThumbnail(receiptPath, 160)
                         }
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -653,12 +653,12 @@ fun QuickAddSheet(
             val isValid = (amountString.toDoubleOrNull() ?: 0.0) > 0 && selectedAccount != null
             Button(
                 onClick = {
-                    val amount = amountString.toDoubleOrNull() ?: 0.0
+                    val rawAmount = amountString.toDoubleOrNull() ?: 0.0
+                    val amount = com.metron.app.util.MoneyUtils.round(rawAmount)
                     if (amount > 0 && selectedAccount != null) {
-                        val finalMerchant = if (merchantText.isBlank()) {
-                            if (selectedType == TransactionType.TRANSFER) "Transfer to ${toAccount?.name ?: "Account"}"
+                        val fallbackMerchant = if (selectedType == TransactionType.TRANSFER) "Transfer to ${toAccount?.name ?: "Account"}"
                             else selectedCategory?.name ?: "Expense"
-                        } else merchantText
+                        val finalMerchant = merchantText.trim().take(100).ifBlank { fallbackMerchant }
 
                         val tx = Transaction(
                             amount = amount,
@@ -667,7 +667,7 @@ fun QuickAddSheet(
                             accountId = selectedAccount!!.id,
                             toAccountId = if (selectedType == TransactionType.TRANSFER) toAccount?.id else null,
                             merchant = finalMerchant,
-                            notes = notesText,
+                            notes = notesText.trim().take(500),
                             receiptPath = receiptPath,
                             timestamp = System.currentTimeMillis()
                         )

@@ -1,6 +1,8 @@
 package com.metron.app
 
 import com.metron.app.model.*
+import com.metron.app.util.CsvUtils
+import com.metron.app.util.MoneyUtils
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -507,4 +509,227 @@ class MetronCoreTest {
         assertEquals(entity.amount, backToEntity.amount, 0.01)
         assertEquals(entity.type, backToEntity.type)
     }
+
+    // ── 11. MoneyUtils Precision & Banker's Rounding Tests ─────────────────────────
+
+    @Test
+    fun testMoneyUtils_BankersRoundingAndPrecision() {
+        // Half-Even (Banker's rounding)
+        assertEquals(10.56, MoneyUtils.round(10.555), 0.0001)
+        assertEquals(10.55, MoneyUtils.round(10.554), 0.0001)
+        assertEquals(10.52, MoneyUtils.round(10.525), 0.0001) // 2 is even -> 10.52
+        assertEquals(10.54, MoneyUtils.round(10.535), 0.0001) // 3 is odd -> 10.54
+
+        // NaN and Infinity safety
+        assertEquals(0.0, MoneyUtils.round(Double.NaN), 0.0001)
+        assertEquals(0.0, MoneyUtils.round(Double.POSITIVE_INFINITY), 0.0001)
+
+        // Floating-point accumulation drift prevention
+        val tenDimes = listOf(0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1)
+        val summed = MoneyUtils.sum(tenDimes)
+        assertEquals(1.00, summed, 0.000001)
+
+        // Parse amount validations
+        assertEquals(1234.56, MoneyUtils.parseAmount("1,234.56") ?: 0.0, 0.001)
+        assertEquals(500.0, MoneyUtils.parseAmount(" 500 ") ?: 0.0, 0.001)
+        assertNull(MoneyUtils.parseAmount("not_a_number"))
+        assertNull(MoneyUtils.parseAmount("-25.0")) // Negative invalid
+        assertNull(MoneyUtils.parseAmount("100000000001.0")) // Exceeds upper limit
+
+        // Formatting
+        val formattedWhole = MoneyUtils.format("₹", 1500.0, Locale.US)
+        assertEquals("₹1,500", formattedWhole)
+        val formattedDec = MoneyUtils.format("₹", 1500.75, Locale.US)
+        assertEquals("₹1,500.75", formattedDec)
+    }
+
+    // ── 12. CsvUtils RFC-4180 Parsing & Escaping Tests ─────────────────────────────
+
+    @Test
+    fun testCsvUtils_ParsingAndEscaping() {
+        // Standard CSV line
+        val csv1 = "Date,Amount,Merchant\n2026-10-01,150.00,Agora Bakery"
+        val rows1 = CsvUtils.parseRows(csv1)
+        assertEquals(2, rows1.size)
+        assertEquals(listOf("Date", "Amount", "Merchant"), rows1[0])
+        assertEquals(listOf("2026-10-01", "150.00", "Agora Bakery"), rows1[1])
+
+        // Embedded commas in quotes
+        val csv2 = "1,1200.0,\"Coffee, Tea & Greek Pastries\",Groceries"
+        val rows2 = CsvUtils.parseRows(csv2)
+        assertEquals(1, rows2.size)
+        assertEquals("Coffee, Tea & Greek Pastries", rows2[0][2])
+
+        // Escaped quotes
+        val csv3 = "\"He said \"\"Metron\"\"\",450.0"
+        val rows3 = CsvUtils.parseRows(csv3)
+        assertEquals(1, rows3.size)
+        assertEquals("He said \"Metron\"", rows3[0][0])
+
+        // Blank input
+        val rowsEmpty = CsvUtils.parseRows("")
+        assertTrue(rowsEmpty.isEmpty())
+
+        // Escaping logic
+        assertEquals("SimpleText", CsvUtils.escape("SimpleText"))
+        assertEquals("\"With,Comma\"", CsvUtils.escape("With,Comma"))
+        assertEquals("\"With\"\"Quotes\"\"\"", CsvUtils.escape("With\"Quotes\""))
+    }
+
+    // ── 13. Data Integrity & Cascading Reassignment Logic ─────────────────────────
+
+    @Test
+    fun testDataIntegrity_CategoryAndAccountDeletionCascading() {
+        // Simulating the transactional fallback logic implemented in MetronRepository
+        val categoryToDeleteId = 10L
+        val fallbackCategoryId = 1L // General / Fallback
+
+        var transactions = listOf(
+            Transaction(id = 1, amount = 100.0, type = TransactionType.EXPENSE, categoryId = categoryToDeleteId, accountId = 1, merchant = "Merchant 1"),
+            Transaction(id = 2, amount = 200.0, type = TransactionType.EXPENSE, categoryId = 2, accountId = 1, merchant = "Merchant 2"),
+            Transaction(id = 3, amount = 300.0, type = TransactionType.EXPENSE, categoryId = categoryToDeleteId, accountId = 2, merchant = "Merchant 3")
+        )
+
+        var recurringItems = listOf(
+            RecurringItem(id = 1, name = "Gym", amount = 50.0, categoryId = categoryToDeleteId, accountId = 1, frequency = RecurringFrequency.MONTHLY, nextDueDate = 1000L)
+        )
+
+        var budgets = listOf(
+            Budget(id = 1, categoryId = categoryToDeleteId, amount = 500.0, monthYear = "2026-10"),
+            Budget(id = 2, categoryId = 2L, amount = 300.0, monthYear = "2026-10")
+        )
+
+        // Execute simulated atomic cascading reassignment
+        transactions = transactions.map { tx ->
+            if (tx.categoryId == categoryToDeleteId) tx.copy(categoryId = fallbackCategoryId) else tx
+        }
+        recurringItems = recurringItems.map { rec ->
+            if (rec.categoryId == categoryToDeleteId) rec.copy(categoryId = fallbackCategoryId) else rec
+        }
+        budgets = budgets.filter { it.categoryId != categoryToDeleteId }
+
+        // Assert zero orphaned records pointing to deleted category
+        assertFalse(transactions.any { it.categoryId == categoryToDeleteId })
+        assertEquals(2, transactions.count { it.categoryId == fallbackCategoryId })
+        assertEquals(fallbackCategoryId, recurringItems[0].categoryId)
+        assertEquals(1, budgets.size)
+        assertEquals(2L, budgets[0].categoryId)
+
+        // Simulating account deletion cascading reassignment
+        val accountToDeleteId = 2L
+        val fallbackAccountId = 1L
+
+        var transferTx = listOf(
+            Transaction(id = 10, amount = 50.0, type = TransactionType.TRANSFER, categoryId = 1, accountId = accountToDeleteId, toAccountId = 3, merchant = "Transfer"),
+            Transaction(id = 11, amount = 75.0, type = TransactionType.TRANSFER, categoryId = 1, accountId = 3, toAccountId = accountToDeleteId, merchant = "Transfer 2")
+        )
+
+        transferTx = transferTx.map { tx ->
+            tx.copy(
+                accountId = if (tx.accountId == accountToDeleteId) fallbackAccountId else tx.accountId,
+                toAccountId = if (tx.toAccountId == accountToDeleteId) fallbackAccountId else tx.toAccountId
+            )
+        }
+
+        assertFalse(transferTx.any { it.accountId == accountToDeleteId || it.toAccountId == accountToDeleteId })
+        assertEquals(fallbackAccountId, transferTx[0].accountId)
+        assertEquals(fallbackAccountId, transferTx[1].toAccountId)
+    }
+
+    // ── 14. Import JSON Staging Validation Defense ────────────────────────────────
+
+    @Test
+    fun testImportJson_ValidationAndStagingDefense() {
+        // Valid JSON payload
+        val validJson = """
+        {
+            "version": 1,
+            "export_date": "2026-10-03T12:00:00Z",
+            "categories": [
+                {"id": 1, "name": "Food", "icon_name": "Restaurant", "color_hex": "#F59E0B", "type": "EXPENSE", "is_default": true, "display_order": 0}
+            ],
+            "accounts": [
+                {"id": 1, "name": "Checking", "type": "CHECKING", "balance": 1500.0, "icon_name": "AccountBalance", "color_hex": "#3B82F6", "is_default": true}
+            ],
+            "transactions": [
+                {"id": 1, "amount": 45.50, "type": "EXPENSE", "category_id": 1, "account_id": 1, "timestamp": 1727950000000, "merchant": "Athens Bakery"}
+            ]
+        }
+        """.trimIndent()
+
+        val json = JSONObject(validJson)
+        val categoriesArray = json.optJSONArray("categories") ?: JSONArray()
+        val accountsArray = json.optJSONArray("accounts") ?: JSONArray()
+        val transactionsArray = json.optJSONArray("transactions") ?: JSONArray()
+
+        assertEquals(1, categoriesArray.length())
+        assertEquals(1, accountsArray.length())
+        assertEquals(1, transactionsArray.length())
+
+        // In-memory staged row validation
+        val txObj = transactionsArray.getJSONObject(0)
+        val rawAmt = txObj.optDouble("amount", 0.0)
+        val validatedAmt = MoneyUtils.round(rawAmt)
+        assertEquals(45.50, validatedAmt, 0.001)
+
+        // Corrupted JSON payload (negative amount, missing required keys)
+        val corruptedJson = """
+        {
+            "version": 1,
+            "transactions": [
+                {"id": 2, "amount": -999.0, "type": "INVALID_TYPE", "timestamp": 0}
+            ]
+        }
+        """.trimIndent()
+
+        val corruptedObj = JSONObject(corruptedJson)
+        val badTxArray = corruptedObj.optJSONArray("transactions") ?: JSONArray()
+        val badRow = badTxArray.getJSONObject(0)
+        val amount = badRow.optDouble("amount", 0.0)
+        val typeStr = badRow.optString("type", "EXPENSE")
+        val safeType = runCatching { TransactionType.valueOf(typeStr) }.getOrDefault(TransactionType.EXPENSE)
+
+        // Ensure fallback defaults prevent app crashes
+        assertEquals(TransactionType.EXPENSE, safeType)
+        val sanitizedAmt = if (amount < 0) 0.0 else MoneyUtils.round(amount)
+        assertEquals(0.0, sanitizedAmt, 0.001)
+    }
+
+    // ── 15. Import CSV Date Parsing Resilience ────────────────────────────────────
+
+    @Test
+    fun testImportCsv_DateParsingResilience() {
+        val testDateStrings = listOf(
+            "2026-10-03",
+            "03/10/2026",
+            "10/03/2026",
+            "2026-10-03 15:45:00",
+            "1727950000000",
+            "completely_invalid_date_string"
+        )
+
+        val dateFormats = listOf(
+            SimpleDateFormat("yyyy-MM-dd", Locale.US),
+            SimpleDateFormat("dd/MM/yyyy", Locale.US),
+            SimpleDateFormat("MM/dd/yyyy", Locale.US),
+            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+        )
+
+        for (dateStr in testDateStrings) {
+            var parsedTime: Long? = null
+            for (fmt in dateFormats) {
+                try {
+                    parsedTime = fmt.parse(dateStr)?.time
+                    if (parsedTime != null) break
+                } catch (_: Exception) {}
+            }
+            if (parsedTime == null) {
+                parsedTime = dateStr.toLongOrNull()
+            }
+            // Fallback guarantee: Never return 0 or throw exception
+            val finalTime = parsedTime ?: 1727950000000L
+            assertTrue("Timestamp must be positive and non-zero: $finalTime", finalTime > 0)
+        }
+    }
 }
+

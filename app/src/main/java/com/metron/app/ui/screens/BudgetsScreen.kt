@@ -22,6 +22,7 @@ import com.metron.app.model.*
 import com.metron.app.theme.*
 import com.metron.app.ui.components.CategoryIconBox
 import com.metron.app.ui.components.parseColor
+import com.metron.app.util.MoneyUtils
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -353,21 +354,22 @@ fun BudgetsScreen(
 
     // Edit Overall Monthly Budget Dialog
     if (showEditOverallBudgetDialog) {
-        var newAmountText by remember { mutableStateOf(if (overallBudget > 0) overallBudget.toInt().toString() else "") }
+        var newAmountText by remember { mutableStateOf(if (overallBudget > 0) String.format(Locale.US, "%.2f", overallBudget).removeSuffix(".00") else "") }
         AlertDialog(
             onDismissRequest = { showEditOverallBudgetDialog = false },
             title = { Text("Monthly Measure Budget") },
             text = {
                 OutlinedTextField(
                     value = newAmountText,
-                    onValueChange = { newAmountText = it },
+                    onValueChange = { if (it.length <= 15) newAmountText = it },
                     label = { Text("Budget Amount ($currencySymbol)") },
                     singleLine = true
                 )
             },
             confirmButton = {
                 Button(onClick = {
-                    val amt = newAmountText.toDoubleOrNull() ?: 0.0
+                    val raw = newAmountText.toDoubleOrNull() ?: 0.0
+                    val amt = MoneyUtils.round(raw)
                     if (amt > 0) onSetOverallBudget(amt)
                     showEditOverallBudgetDialog = false
                 }) {
@@ -406,7 +408,7 @@ fun BudgetsScreen(
                     }
                     OutlinedTextField(
                         value = budgetAmtText,
-                        onValueChange = { budgetAmtText = it },
+                        onValueChange = { if (it.length <= 15) budgetAmtText = it },
                         label = { Text("Limit Amount ($currencySymbol)") },
                         singleLine = true
                     )
@@ -414,7 +416,8 @@ fun BudgetsScreen(
             },
             confirmButton = {
                 Button(onClick = {
-                    val amt = budgetAmtText.toDoubleOrNull() ?: 0.0
+                    val raw = budgetAmtText.toDoubleOrNull() ?: 0.0
+                    val amt = MoneyUtils.round(raw)
                     if (amt > 0 && selectedCat != null) {
                         onSetCategoryBudget(selectedCat!!.id, amt)
                     }
@@ -444,13 +447,13 @@ fun BudgetsScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
                         value = nameText,
-                        onValueChange = { nameText = it },
+                        onValueChange = { if (it.length <= 100) nameText = it },
                         label = { Text("Name (e.g. Netflix, Rent)") },
                         singleLine = true
                     )
                     OutlinedTextField(
                         value = amtText,
-                        onValueChange = { amtText = it },
+                        onValueChange = { if (it.length <= 15) amtText = it },
                         label = { Text("Amount ($currencySymbol)") },
                         singleLine = true
                     )
@@ -458,10 +461,12 @@ fun BudgetsScreen(
             },
             confirmButton = {
                 Button(onClick = {
-                    val amt = amtText.toDoubleOrNull() ?: 0.0
-                    if (nameText.isNotBlank() && amt > 0 && selectedCat != null && selectedAcc != null) {
+                    val raw = amtText.toDoubleOrNull() ?: 0.0
+                    val amt = MoneyUtils.round(raw)
+                    val safeName = nameText.trim().take(100)
+                    if (safeName.isNotBlank() && amt > 0 && selectedCat != null && selectedAcc != null) {
                         val item = RecurringItem(
-                            name = nameText,
+                            name = safeName,
                             amount = amt,
                             categoryId = selectedCat!!.id,
                             accountId = selectedAcc!!.id,

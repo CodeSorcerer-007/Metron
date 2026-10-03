@@ -170,7 +170,7 @@ class MetronRepository(val context: Context) {
     }
 
     private fun calculateAccountBalance(db: android.database.sqlite.SQLiteDatabase, accountId: Long, initial: Double): Double {
-        var balance = initial
+        var balance = java.math.BigDecimal.valueOf(initial)
         val cursor = db.rawQuery(
             "SELECT type, amount, account_id, to_account_id FROM ${MetronDatabaseHelper.TABLE_TRANSACTIONS} WHERE account_id = ? OR to_account_id = ?",
             arrayOf(accountId.toString(), accountId.toString())
@@ -178,25 +178,25 @@ class MetronRepository(val context: Context) {
         cursor.use {
             while (it.moveToNext()) {
                 val type = it.getString(0)
-                val amount = it.getDouble(1)
+                val amount = java.math.BigDecimal.valueOf(it.getDouble(1))
                 val fromId = it.getLong(2)
                 val toId = if (!it.isNull(3)) it.getLong(3) else null
 
                 when (type) {
                     TransactionType.INCOME.name -> {
-                        if (fromId == accountId) balance += amount
+                        if (fromId == accountId) balance = balance.add(amount)
                     }
                     TransactionType.EXPENSE.name -> {
-                        if (fromId == accountId) balance -= amount
+                        if (fromId == accountId) balance = balance.subtract(amount)
                     }
                     TransactionType.TRANSFER.name -> {
-                        if (fromId == accountId) balance -= amount
-                        if (toId == accountId) balance += amount
+                        if (fromId == accountId) balance = balance.subtract(amount)
+                        if (toId == accountId) balance = balance.add(amount)
                     }
                 }
             }
         }
-        return balance
+        return balance.setScale(2, java.math.RoundingMode.HALF_EVEN).toDouble()
     }
 
     private fun loadTransactions() {
@@ -281,17 +281,20 @@ class MetronRepository(val context: Context) {
     // ---------------- TRANSACTION CRUD ----------------
 
     fun addTransaction(tx: Transaction): Long {
+        val roundedAmount = com.metron.app.util.MoneyUtils.round(tx.amount)
+        if (roundedAmount <= 0.0) return -1L
+
         val db = dbHelper.writableDatabase
         val cv = ContentValues().apply {
-            put("amount", tx.amount)
+            put("amount", roundedAmount)
             put("type", tx.type.name)
             put("category_id", tx.categoryId)
             put("account_id", tx.accountId)
             if (tx.toAccountId != null) put("to_account_id", tx.toAccountId) else putNull("to_account_id")
             put("timestamp", tx.timestamp)
-            put("merchant", tx.merchant.trim())
-            put("notes", tx.notes.trim())
-            put("tag", tx.tag.trim())
+            put("merchant", tx.merchant.trim().take(100))
+            put("notes", tx.notes.trim().take(500))
+            put("tag", tx.tag.trim().take(50))
             put("currency", _currencyCode.value)
             if (tx.receiptPath != null) put("receipt_path", tx.receiptPath) else putNull("receipt_path")
             put("created_at", System.currentTimeMillis())
@@ -302,17 +305,20 @@ class MetronRepository(val context: Context) {
     }
 
     fun updateTransaction(tx: Transaction) {
+        val roundedAmount = com.metron.app.util.MoneyUtils.round(tx.amount)
+        if (roundedAmount <= 0.0) return
+
         val db = dbHelper.writableDatabase
         val cv = ContentValues().apply {
-            put("amount", tx.amount)
+            put("amount", roundedAmount)
             put("type", tx.type.name)
             put("category_id", tx.categoryId)
             put("account_id", tx.accountId)
             if (tx.toAccountId != null) put("to_account_id", tx.toAccountId) else putNull("to_account_id")
             put("timestamp", tx.timestamp)
-            put("merchant", tx.merchant.trim())
-            put("notes", tx.notes.trim())
-            put("tag", tx.tag.trim())
+            put("merchant", tx.merchant.trim().take(100))
+            put("notes", tx.notes.trim().take(500))
+            put("tag", tx.tag.trim().take(50))
             if (tx.receiptPath != null) put("receipt_path", tx.receiptPath) else putNull("receipt_path")
         }
         db.update(MetronDatabaseHelper.TABLE_TRANSACTIONS, cv, "id = ?", arrayOf(tx.id.toString()))
@@ -344,7 +350,7 @@ class MetronRepository(val context: Context) {
     fun addCategory(category: Category): Long {
         val db = dbHelper.writableDatabase
         val cv = ContentValues().apply {
-            put("name", category.name.trim())
+            put("name", category.name.trim().take(50))
             put("icon_name", category.iconName)
             put("color_hex", category.colorHex)
             put("type", category.type.name)
@@ -359,7 +365,7 @@ class MetronRepository(val context: Context) {
     fun updateCategory(category: Category) {
         val db = dbHelper.writableDatabase
         val cv = ContentValues().apply {
-            put("name", category.name.trim())
+            put("name", category.name.trim().take(50))
             put("icon_name", category.iconName)
             put("color_hex", category.colorHex)
             put("type", category.type.name)
@@ -370,8 +376,30 @@ class MetronRepository(val context: Context) {
 
     fun deleteCategory(id: Long) {
         val db = dbHelper.writableDatabase
-        db.delete(MetronDatabaseHelper.TABLE_CATEGORIES, "id = ?", arrayOf(id.toString()))
-        reloadAll()
+        db.beginTransaction()
+        try {
+            val fallback = _categories.value.firstOrNull { it.id != id }
+            val fallbackId = fallback?.id ?: 1L
+
+            // Reassign transactions
+            val cvTx = ContentValues().apply { put("category_id", fallbackId) }
+            db.update(MetronDatabaseHelper.TABLE_TRANSACTIONS, cvTx, "category_id = ?", arrayOf(id.toString()))
+
+            // Delete associated budget
+            db.delete(MetronDatabaseHelper.TABLE_BUDGETS, "category_id = ?", arrayOf(id.toString()))
+
+            // Reassign recurring items
+            val cvRec = ContentValues().apply { put("category_id", fallbackId) }
+            db.update(MetronDatabaseHelper.TABLE_RECURRING, cvRec, "category_id = ?", arrayOf(id.toString()))
+
+            // Delete the category
+            db.delete(MetronDatabaseHelper.TABLE_CATEGORIES, "id = ?", arrayOf(id.toString()))
+
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+            reloadAll()
+        }
     }
 
     // ---------------- ACCOUNT CRUD ----------------
@@ -379,9 +407,9 @@ class MetronRepository(val context: Context) {
     fun addAccount(account: Account): Long {
         val db = dbHelper.writableDatabase
         val cv = ContentValues().apply {
-            put("name", account.name.trim())
+            put("name", account.name.trim().take(50))
             put("type", account.type.name)
-            put("initial_balance", account.initialBalance)
+            put("initial_balance", com.metron.app.util.MoneyUtils.round(account.initialBalance.coerceAtLeast(0.0)))
             put("color_hex", account.colorHex)
             put("icon_name", account.iconName)
         }
@@ -393,9 +421,9 @@ class MetronRepository(val context: Context) {
     fun updateAccount(account: Account) {
         val db = dbHelper.writableDatabase
         val cv = ContentValues().apply {
-            put("name", account.name.trim())
+            put("name", account.name.trim().take(50))
             put("type", account.type.name)
-            put("initial_balance", account.initialBalance)
+            put("initial_balance", com.metron.app.util.MoneyUtils.round(account.initialBalance.coerceAtLeast(0.0)))
             put("color_hex", account.colorHex)
             put("icon_name", account.iconName)
         }
@@ -405,8 +433,30 @@ class MetronRepository(val context: Context) {
 
     fun deleteAccount(id: Long) {
         val db = dbHelper.writableDatabase
-        db.delete(MetronDatabaseHelper.TABLE_ACCOUNTS, "id = ?", arrayOf(id.toString()))
-        reloadAll()
+        db.beginTransaction()
+        try {
+            val fallback = _accounts.value.firstOrNull { it.id != id }
+            val fallbackId = fallback?.id ?: 1L
+
+            // Reassign transactions
+            val cvFrom = ContentValues().apply { put("account_id", fallbackId) }
+            db.update(MetronDatabaseHelper.TABLE_TRANSACTIONS, cvFrom, "account_id = ?", arrayOf(id.toString()))
+
+            val cvTo = ContentValues().apply { put("to_account_id", fallbackId) }
+            db.update(MetronDatabaseHelper.TABLE_TRANSACTIONS, cvTo, "to_account_id = ?", arrayOf(id.toString()))
+
+            // Reassign recurring items
+            val cvRec = ContentValues().apply { put("account_id", fallbackId) }
+            db.update(MetronDatabaseHelper.TABLE_RECURRING, cvRec, "account_id = ?", arrayOf(id.toString()))
+
+            // Delete account
+            db.delete(MetronDatabaseHelper.TABLE_ACCOUNTS, "id = ?", arrayOf(id.toString()))
+
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+            reloadAll()
+        }
     }
 
     // ---------------- BUDGETS ----------------
@@ -833,131 +883,245 @@ class MetronRepository(val context: Context) {
             val timeStr = sdfTime.format(Date(t.timestamp))
             val catName = catMap[t.categoryId]?.name ?: "Unknown"
             val accName = accMap[t.accountId]?.name ?: "Unknown"
-            val merchantSafe = t.merchant.replace("\"", "\"\"")
-            val notesSafe = t.notes.replace("\"", "\"\"")
-            val tagSafe = t.tag.replace("\"", "\"\"")
 
             sb.append("${t.id},")
             sb.append("$dateStr,")
             sb.append("$timeStr,")
             sb.append("${t.type.name},")
-            sb.append("\"$catName\",")
-            sb.append("\"$merchantSafe\",")
-            sb.append("${t.amount},")
+            sb.append("${com.metron.app.util.CsvUtils.escape(catName)},")
+            sb.append("${com.metron.app.util.CsvUtils.escape(t.merchant)},")
+            sb.append("${com.metron.app.util.MoneyUtils.round(t.amount)},")
             sb.append("${t.currency},")
-            sb.append("\"$accName\",")
-            sb.append("\"$notesSafe\",")
-            sb.append("\"$tagSafe\"\n")
+            sb.append("${com.metron.app.util.CsvUtils.escape(accName)},")
+            sb.append("${com.metron.app.util.CsvUtils.escape(t.notes)},")
+            sb.append("${com.metron.app.util.CsvUtils.escape(t.tag)}\n")
         }
         return sb.toString()
     }
 
-    fun importFromJson(jsonStr: String): Boolean {
+    fun importFromCsv(csvStr: String): Boolean {
+        if (csvStr.isBlank()) return false
         return try {
-            val root = JSONObject(jsonStr)
+            val rows = com.metron.app.util.CsvUtils.parseRows(csvStr)
+            if (rows.size < 2) return false
+
+            val header = rows[0].map { it.lowercase().trim() }
+            val amountIdx = header.indexOfFirst { it.contains("amount") }
+            val merchantIdx = header.indexOfFirst { it.contains("merchant") || it.contains("description") || it.contains("payee") }
+            val dateIdx = header.indexOfFirst { it.contains("date") }
+            val typeIdx = header.indexOfFirst { it.contains("type") }
+            val catIdx = header.indexOfFirst { it.contains("category") }
+            val notesIdx = header.indexOfFirst { it.contains("note") }
+            val tagIdx = header.indexOfFirst { it.contains("tag") }
+
+            if (amountIdx == -1) return false
+
+            val defaultCatId = _categories.value.firstOrNull()?.id ?: 1L
+            val defaultAccId = _accounts.value.firstOrNull()?.id ?: 1L
+
+            val parsedTxs = mutableListOf<ContentValues>()
+            val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+            for (i in 1 until rows.size) {
+                val row = rows[i]
+                if (row.size <= amountIdx) continue
+                val rawAmt = com.metron.app.util.MoneyUtils.parseAmount(row[amountIdx]) ?: continue
+                if (rawAmt <= 0.0) continue
+
+                val merchant = if (merchantIdx != -1 && merchantIdx < row.size) row[merchantIdx].trim().take(100) else "Imported Item"
+                val dateStr = if (dateIdx != -1 && dateIdx < row.size) row[dateIdx].trim() else ""
+                val timestamp = try {
+                    if (dateStr.isNotBlank()) sdfDate.parse(dateStr)?.time ?: System.currentTimeMillis()
+                    else System.currentTimeMillis()
+                } catch (e: Exception) {
+                    System.currentTimeMillis()
+                }
+
+                val typeStr = if (typeIdx != -1 && typeIdx < row.size) row[typeIdx].uppercase().trim() else TransactionType.EXPENSE.name
+                val txType = try { TransactionType.valueOf(typeStr) } catch (e: Exception) { TransactionType.EXPENSE }
+
+                val catName = if (catIdx != -1 && catIdx < row.size) row[catIdx].trim() else ""
+                val catId = _categories.value.find { it.name.equals(catName, ignoreCase = true) }?.id ?: defaultCatId
+
+                val notes = if (notesIdx != -1 && notesIdx < row.size) row[notesIdx].trim().take(500) else ""
+                val tag = if (tagIdx != -1 && tagIdx < row.size) row[tagIdx].trim().take(50) else ""
+
+                parsedTxs.add(ContentValues().apply {
+                    put("amount", rawAmt)
+                    put("type", txType.name)
+                    put("category_id", catId)
+                    put("account_id", defaultAccId)
+                    putNull("to_account_id")
+                    put("timestamp", timestamp)
+                    put("merchant", merchant.ifBlank { "Imported Expense" })
+                    put("notes", notes)
+                    put("tag", tag)
+                    put("currency", "INR")
+                    putNull("receipt_path")
+                    put("created_at", System.currentTimeMillis())
+                })
+            }
+
+            if (parsedTxs.isEmpty()) return false
+
             val db = dbHelper.writableDatabase
             db.beginTransaction()
             try {
-                // Clear existing
-                db.delete(MetronDatabaseHelper.TABLE_TRANSACTIONS, null, null)
-                db.delete(MetronDatabaseHelper.TABLE_CATEGORIES, null, null)
-                db.delete(MetronDatabaseHelper.TABLE_ACCOUNTS, null, null)
-                db.delete(MetronDatabaseHelper.TABLE_BUDGETS, null, null)
-                db.delete(MetronDatabaseHelper.TABLE_RECURRING, null, null)
-
-                // Restore categories
-                val cats = root.optJSONArray("categories")
-                if (cats != null) {
-                    for (i in 0 until cats.length()) {
-                        val o = cats.getJSONObject(i)
-                        val cv = ContentValues().apply {
-                            put("id", o.getLong("id"))
-                            put("name", o.getString("name"))
-                            put("icon_name", o.getString("iconName"))
-                            put("color_hex", o.getString("colorHex"))
-                            put("type", o.getString("type"))
-                            put("is_default", if (o.optBoolean("isDefault", false)) 1 else 0)
-                            put("display_order", o.optInt("displayOrder", i))
-                        }
-                        db.insert(MetronDatabaseHelper.TABLE_CATEGORIES, null, cv)
-                    }
+                for (cv in parsedTxs) {
+                    db.insert(MetronDatabaseHelper.TABLE_TRANSACTIONS, null, cv)
                 }
+                db.setTransactionSuccessful()
+                true
+            } finally {
+                db.endTransaction()
+                reloadAll()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
 
-                // Restore accounts
-                val accs = root.optJSONArray("accounts")
-                if (accs != null) {
-                    for (i in 0 until accs.length()) {
-                        val o = accs.getJSONObject(i)
-                        val cv = ContentValues().apply {
-                            put("id", o.getLong("id"))
-                            put("name", o.getString("name"))
-                            put("type", o.getString("type"))
-                            put("initial_balance", o.getDouble("initialBalance"))
-                            put("color_hex", o.getString("colorHex"))
-                            put("icon_name", o.getString("iconName"))
-                        }
-                        db.insert(MetronDatabaseHelper.TABLE_ACCOUNTS, null, cv)
-                    }
+    fun importFromJson(jsonStr: String): Boolean {
+        if (jsonStr.isBlank()) return false
+        return try {
+            val root = JSONObject(jsonStr)
+
+            // Stage and validate in-memory before modifying database
+            val parsedCats = mutableListOf<ContentValues>()
+            val cats = root.optJSONArray("categories")
+            if (cats != null) {
+                for (i in 0 until cats.length()) {
+                    val o = cats.optJSONObject(i) ?: continue
+                    val id = o.optLong("id", -1L)
+                    val name = o.optString("name", "").trim()
+                    if (id < 0 || name.isBlank()) continue
+                    parsedCats.add(ContentValues().apply {
+                        put("id", id)
+                        put("name", name.take(50))
+                        put("icon_name", o.optString("iconName", "Category"))
+                        put("color_hex", o.optString("colorHex", "#D4AF37"))
+                        put("type", o.optString("type", CategoryType.EXPENSE.name))
+                        put("is_default", if (o.optBoolean("isDefault", false)) 1 else 0)
+                        put("display_order", o.optInt("displayOrder", i))
+                    })
                 }
+            }
 
-                // Restore transactions
-                val txs = root.optJSONArray("transactions")
-                if (txs != null) {
-                    for (i in 0 until txs.length()) {
-                        val o = txs.getJSONObject(i)
-                        val cv = ContentValues().apply {
-                            put("id", o.getLong("id"))
-                            put("amount", o.getDouble("amount"))
-                            put("type", o.getString("type"))
-                            put("category_id", o.getLong("categoryId"))
-                            put("account_id", o.getLong("accountId"))
-                            if (o.has("toAccountId")) put("to_account_id", o.getLong("toAccountId")) else putNull("to_account_id")
-                            put("timestamp", o.getLong("timestamp"))
-                            put("merchant", o.getString("merchant"))
-                            put("notes", o.optString("notes", ""))
-                            put("tag", o.optString("tag", ""))
-                            put("currency", o.optString("currency", "INR"))
-                            if (o.has("receiptPath")) put("receipt_path", o.getString("receiptPath")) else putNull("receipt_path")
-                            put("created_at", System.currentTimeMillis())
-                        }
-                        db.insert(MetronDatabaseHelper.TABLE_TRANSACTIONS, null, cv)
-                    }
+            val parsedAccs = mutableListOf<ContentValues>()
+            val accs = root.optJSONArray("accounts")
+            if (accs != null) {
+                for (i in 0 until accs.length()) {
+                    val o = accs.optJSONObject(i) ?: continue
+                    val id = o.optLong("id", -1L)
+                    val name = o.optString("name", "").trim()
+                    if (id < 0 || name.isBlank()) continue
+                    parsedAccs.add(ContentValues().apply {
+                        put("id", id)
+                        put("name", name.take(50))
+                        put("type", o.optString("type", AccountType.BANK.name))
+                        put("initial_balance", com.metron.app.util.MoneyUtils.round(o.optDouble("initialBalance", 0.0)))
+                        put("color_hex", o.optString("colorHex", "#38BDF8"))
+                        put("icon_name", o.optString("iconName", "AccountBalance"))
+                    })
                 }
+            }
 
-                // Restore budgets
-                val buds = root.optJSONArray("budgets")
-                if (buds != null) {
-                    for (i in 0 until buds.length()) {
-                        val o = buds.getJSONObject(i)
-                        val cv = ContentValues().apply {
-                            put("id", o.getLong("id"))
-                            if (o.has("categoryId")) put("category_id", o.getLong("categoryId")) else putNull("category_id")
-                            put("amount", o.getDouble("amount"))
-                            put("period", o.getString("period"))
-                            put("month_year", o.optString("monthYear", "ALL"))
-                        }
-                        db.insert(MetronDatabaseHelper.TABLE_BUDGETS, null, cv)
-                    }
+            val parsedTxs = mutableListOf<ContentValues>()
+            val txs = root.optJSONArray("transactions")
+            if (txs != null) {
+                for (i in 0 until txs.length()) {
+                    val o = txs.optJSONObject(i) ?: continue
+                    val amount = com.metron.app.util.MoneyUtils.round(o.optDouble("amount", 0.0))
+                    val catId = o.optLong("categoryId", 1L)
+                    val accId = o.optLong("accountId", 1L)
+                    val timestamp = o.optLong("timestamp", System.currentTimeMillis())
+                    val merchant = o.optString("merchant", "Expense").trim()
+                    if (amount <= 0.0) continue
+
+                    parsedTxs.add(ContentValues().apply {
+                        if (o.has("id")) put("id", o.getLong("id"))
+                        put("amount", amount)
+                        put("type", o.optString("type", TransactionType.EXPENSE.name))
+                        put("category_id", catId)
+                        put("account_id", accId)
+                        if (o.has("toAccountId") && !o.isNull("toAccountId")) put("to_account_id", o.getLong("toAccountId")) else putNull("to_account_id")
+                        put("timestamp", timestamp)
+                        put("merchant", merchant.take(100))
+                        put("notes", o.optString("notes", "").take(500))
+                        put("tag", o.optString("tag", "").take(50))
+                        put("currency", o.optString("currency", "INR"))
+                        if (o.has("receiptPath") && !o.isNull("receiptPath")) put("receipt_path", o.getString("receiptPath")) else putNull("receipt_path")
+                        put("created_at", o.optLong("createdAt", System.currentTimeMillis()))
+                    })
                 }
+            }
 
-                // Restore recurring
-                val recs = root.optJSONArray("recurring")
-                if (recs != null) {
-                    for (i in 0 until recs.length()) {
-                        val o = recs.getJSONObject(i)
-                        val cv = ContentValues().apply {
-                            put("id", o.getLong("id"))
-                            put("name", o.getString("name"))
-                            put("amount", o.getDouble("amount"))
-                            put("type", o.getString("type"))
-                            put("category_id", o.getLong("categoryId"))
-                            put("account_id", o.getLong("accountId"))
-                            put("frequency", o.getString("frequency"))
-                            put("next_due_date", o.getLong("nextDueDate"))
-                            put("is_active", if (o.optBoolean("isActive", true)) 1 else 0)
-                        }
-                        db.insert(MetronDatabaseHelper.TABLE_RECURRING, null, cv)
-                    }
+            if (parsedCats.isEmpty() && parsedAccs.isEmpty() && parsedTxs.isEmpty()) {
+                return false
+            }
+
+            val parsedBudgets = mutableListOf<ContentValues>()
+            val buds = root.optJSONArray("budgets")
+            if (buds != null) {
+                for (i in 0 until buds.length()) {
+                    val o = buds.optJSONObject(i) ?: continue
+                    val amt = com.metron.app.util.MoneyUtils.round(o.optDouble("amount", 0.0))
+                    if (amt <= 0.0) continue
+                    parsedBudgets.add(ContentValues().apply {
+                        if (o.has("id")) put("id", o.getLong("id"))
+                        if (o.has("categoryId") && !o.isNull("categoryId")) put("category_id", o.getLong("categoryId")) else putNull("category_id")
+                        put("amount", amt)
+                        put("period", o.optString("period", BudgetPeriod.MONTHLY.name))
+                        put("month_year", o.optString("monthYear", "ALL"))
+                    })
+                }
+            }
+
+            val parsedRecs = mutableListOf<ContentValues>()
+            val recs = root.optJSONArray("recurring")
+            if (recs != null) {
+                for (i in 0 until recs.length()) {
+                    val o = recs.optJSONObject(i) ?: continue
+                    val amt = com.metron.app.util.MoneyUtils.round(o.optDouble("amount", 0.0))
+                    val name = o.optString("name", "Subscription").trim()
+                    if (amt <= 0.0 || name.isBlank()) continue
+                    parsedRecs.add(ContentValues().apply {
+                        if (o.has("id")) put("id", o.getLong("id"))
+                        put("name", name.take(100))
+                        put("amount", amt)
+                        put("type", o.optString("type", TransactionType.EXPENSE.name))
+                        put("category_id", o.optLong("categoryId", 1L))
+                        put("account_id", o.optLong("accountId", 1L))
+                        put("frequency", o.optString("frequency", RecurringFrequency.MONTHLY.name))
+                        put("next_due_date", o.optLong("nextDueDate", System.currentTimeMillis()))
+                        put("is_active", if (o.optBoolean("isActive", true)) 1 else 0)
+                    })
+                }
+            }
+
+            val db = dbHelper.writableDatabase
+            db.beginTransaction()
+            try {
+                if (parsedCats.isNotEmpty()) {
+                    db.delete(MetronDatabaseHelper.TABLE_CATEGORIES, null, null)
+                    for (cv in parsedCats) db.insert(MetronDatabaseHelper.TABLE_CATEGORIES, null, cv)
+                }
+                if (parsedAccs.isNotEmpty()) {
+                    db.delete(MetronDatabaseHelper.TABLE_ACCOUNTS, null, null)
+                    for (cv in parsedAccs) db.insert(MetronDatabaseHelper.TABLE_ACCOUNTS, null, cv)
+                }
+                if (parsedTxs.isNotEmpty()) {
+                    db.delete(MetronDatabaseHelper.TABLE_TRANSACTIONS, null, null)
+                    for (cv in parsedTxs) db.insert(MetronDatabaseHelper.TABLE_TRANSACTIONS, null, cv)
+                }
+                if (parsedBudgets.isNotEmpty()) {
+                    db.delete(MetronDatabaseHelper.TABLE_BUDGETS, null, null)
+                    for (cv in parsedBudgets) db.insert(MetronDatabaseHelper.TABLE_BUDGETS, null, cv)
+                }
+                if (parsedRecs.isNotEmpty()) {
+                    db.delete(MetronDatabaseHelper.TABLE_RECURRING, null, null)
+                    for (cv in parsedRecs) db.insert(MetronDatabaseHelper.TABLE_RECURRING, null, cv)
                 }
 
                 db.setTransactionSuccessful()
