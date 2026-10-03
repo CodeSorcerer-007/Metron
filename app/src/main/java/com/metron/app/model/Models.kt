@@ -12,6 +12,7 @@ data class Transaction(
     val notes: String = "",
     val tag: String = "",
     val currency: String = "INR",
+    val receiptPath: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
 

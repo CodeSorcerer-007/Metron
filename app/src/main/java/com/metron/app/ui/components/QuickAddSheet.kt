@@ -1,6 +1,11 @@
 package com.metron.app.ui.components
 
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,12 +24,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.metron.app.MetronApp
+import com.metron.app.haptics.HapticsManager
 import com.metron.app.model.*
 import com.metron.app.theme.*
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,6 +48,9 @@ fun QuickAddSheet(
     onSuggestAccount: (String) -> Account?,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+    val repo = MetronApp.repository
+
     var amountString by remember { mutableStateOf("") }
     var selectedType by remember { mutableStateOf(TransactionType.EXPENSE) }
     var selectedCategory by remember {
@@ -47,7 +60,26 @@ fun QuickAddSheet(
     var toAccount by remember { mutableStateOf(accounts.getOrNull(1)) }
     var merchantText by remember { mutableStateOf("") }
     var notesText by remember { mutableStateOf("") }
+    var receiptPath by remember { mutableStateOf<String?>(null) }
     var showExtraDetails by remember { mutableStateOf(false) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    val path = repo.saveReceiptImage(stream)
+                    if (path != null) {
+                        receiptPath = path
+                        HapticsManager.click()
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     val filteredCategories = remember(categories, selectedType) {
         when (selectedType) {
@@ -97,7 +129,10 @@ fun QuickAddSheet(
                             .weight(1f)
                             .clip(RoundedCornerShape(10.dp))
                             .background(if (isSelected) activeColor else Color.Transparent)
-                            .clickable { selectedType = type }
+                            .clickable {
+                                HapticsManager.click()
+                                selectedType = type
+                            }
                             .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -150,6 +185,7 @@ fun QuickAddSheet(
                             .border(1.dp, GoldPrimary.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                             .clickable {
+                                HapticsManager.tick()
                                 val current = amountString.toDoubleOrNull() ?: 0.0
                                 amountString = (current + bump).toInt().toString()
                             }
@@ -188,7 +224,10 @@ fun QuickAddSheet(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(if (isSelected) catColor else MaterialTheme.colorScheme.surfaceVariant)
-                                .clickable { selectedCategory = cat }
+                                .clickable {
+                                    HapticsManager.tick()
+                                    selectedCategory = cat
+                                }
                                 .padding(horizontal = 10.dp, vertical = 7.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -246,6 +285,7 @@ fun QuickAddSheet(
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
                                 .clickable {
+                                    HapticsManager.tick()
                                     merchantText = merchant
                                     val inferredCat = onSuggestCategory(merchant)
                                     if (inferredCat != null) selectedCategory = inferredCat
@@ -290,7 +330,10 @@ fun QuickAddSheet(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
                             .background(if (isSelected) accColor else MaterialTheme.colorScheme.surfaceVariant)
-                            .clickable { selectedAccount = acc }
+                            .clickable {
+                                HapticsManager.tick()
+                                selectedAccount = acc
+                            }
                             .padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -332,7 +375,10 @@ fun QuickAddSheet(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(if (isSelected) accColor else MaterialTheme.colorScheme.surfaceVariant)
-                                .clickable { toAccount = acc }
+                                .clickable {
+                                    HapticsManager.tick()
+                                    toAccount = acc
+                                }
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -354,18 +400,21 @@ fun QuickAddSheet(
                 }
             }
 
-            // Expandable Notes
+            // Expandable Notes & Receipt
             Spacer(modifier = Modifier.height(10.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { showExtraDetails = !showExtraDetails }
+                    .clickable {
+                        HapticsManager.tick()
+                        showExtraDetails = !showExtraDetails
+                    }
                     .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = if (showExtraDetails) "Hide notes" else "+ Add note or tag",
+                    text = if (showExtraDetails) "Hide notes & receipt" else "+ Add note & receipt",
                     fontSize = 12.sp,
                     color = GoldPrimary,
                     fontWeight = FontWeight.Medium
@@ -379,7 +428,10 @@ fun QuickAddSheet(
             }
 
             AnimatedVisibility(visible = showExtraDetails) {
-                Column(modifier = Modifier.padding(top = 6.dp)) {
+                Column(
+                    modifier = Modifier.padding(top = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     OutlinedTextField(
                         value = notesText,
                         onValueChange = { notesText = it },
@@ -392,6 +444,74 @@ fun QuickAddSheet(
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline
                         )
                     )
+
+                    // Receipt attachment button / preview
+                    if (!receiptPath.isNullOrBlank() && File(receiptPath!!).exists()) {
+                        val bitmap = remember(receiptPath) {
+                            BitmapFactory.decodeFile(receiptPath)
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(8.dp)
+                        ) {
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = "Receipt Preview",
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Receipt Photo Attached",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = LaurelGreen
+                                )
+                                Text(
+                                    text = "Stored securely on device",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    repo.deleteReceiptImage(receiptPath)
+                                    receiptPath = null
+                                    HapticsManager.click()
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Remove receipt",
+                                    tint = SpartanRose,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = {
+                                HapticsManager.click()
+                                photoPickerLauncher.launch("image/*")
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(16.dp), tint = GoldPrimary)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Attach Receipt / Bill Photo", fontSize = 12.sp, color = GoldPrimary)
+                        }
+                    }
                 }
             }
 
@@ -422,6 +542,7 @@ fun QuickAddSheet(
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
                                     .clickable {
+                                        HapticsManager.tick()
                                         when (key) {
                                             "⌫" -> {
                                                 if (amountString.isNotEmpty()) {
@@ -476,8 +597,10 @@ fun QuickAddSheet(
                             toAccountId = if (selectedType == TransactionType.TRANSFER) toAccount?.id else null,
                             merchant = finalMerchant,
                             notes = notesText,
+                            receiptPath = receiptPath,
                             timestamp = System.currentTimeMillis()
                         )
+                        HapticsManager.success()
                         onSaveTransaction(tx)
                         onDismiss()
                     }

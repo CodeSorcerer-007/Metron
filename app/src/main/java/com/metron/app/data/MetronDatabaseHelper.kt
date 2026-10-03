@@ -11,7 +11,7 @@ class MetronDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABAS
 
     companion object {
         const val DATABASE_NAME = "metron_offline.db"
-        const val DATABASE_VERSION = 1
+        const val DATABASE_VERSION = 2
 
         // Tables
         const val TABLE_TRANSACTIONS = "transactions"
@@ -48,7 +48,7 @@ class MetronDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABAS
             )
         """.trimIndent())
 
-        // Transactions table
+        // Transactions table with receipt_path support
         db.execSQL("""
             CREATE TABLE $TABLE_TRANSACTIONS (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,6 +62,7 @@ class MetronDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABAS
                 notes TEXT NOT NULL DEFAULT '',
                 tag TEXT NOT NULL DEFAULT '',
                 currency TEXT NOT NULL DEFAULT 'INR',
+                receipt_path TEXT,
                 created_at INTEGER NOT NULL
             )
         """.trimIndent())
@@ -117,7 +118,13 @@ class MetronDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABAS
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Future migrations if schema evolves
+        if (oldVersion < 2) {
+            try {
+                db.execSQL("ALTER TABLE $TABLE_TRANSACTIONS ADD COLUMN receipt_path TEXT")
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     private fun seedCategories(db: SQLiteDatabase) {
@@ -173,10 +180,11 @@ class MetronDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABAS
     }
 
     private fun seedAccounts(db: SQLiteDatabase) {
+        // Clean slate: start with 0.0 balance so user tracks their real funds
         val accounts = listOf(
-            Account(name = "Cash", type = AccountType.CASH, initialBalance = 1500.0, colorHex = "#10B981", iconName = "AccountBalanceWallet"),
-            Account(name = "Main Bank", type = AccountType.BANK, initialBalance = 35000.0, colorHex = "#38BDF8", iconName = "AccountBalance"),
-            Account(name = "UPI / Wallet", type = AccountType.UPI, initialBalance = 6500.0, colorHex = "#8B5CF6", iconName = "QrCodeScanner"),
+            Account(name = "Cash", type = AccountType.CASH, initialBalance = 0.0, colorHex = "#10B981", iconName = "AccountBalanceWallet"),
+            Account(name = "Main Bank", type = AccountType.BANK, initialBalance = 0.0, colorHex = "#38BDF8", iconName = "AccountBalance"),
+            Account(name = "UPI / Wallet", type = AccountType.UPI, initialBalance = 0.0, colorHex = "#8B5CF6", iconName = "QrCodeScanner"),
             Account(name = "Credit Card", type = AccountType.CREDIT_CARD, initialBalance = 0.0, colorHex = "#F43F5E", iconName = "CreditCard")
         )
 
@@ -199,7 +207,13 @@ class MetronDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABAS
             "theme_mode" to "AEGEAN_DARK",
             "calm_mode" to "0",
             "biometric_enabled" to "0",
-            "onboarding_completed" to "1"
+            "onboarding_completed" to "0", // 0 triggers the first-timer interactive guided tour!
+            "haptics_enabled" to "1",
+            "notifications_enabled" to "1",
+            "daily_reminder_hour" to "20",
+            "daily_reminder_minute" to "30",
+            "bill_reminders_enabled" to "1",
+            "budget_alerts_enabled" to "1"
         )
         for ((k, v) in prefs) {
             val cv = ContentValues().apply {

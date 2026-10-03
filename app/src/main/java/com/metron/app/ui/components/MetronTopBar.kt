@@ -78,7 +78,10 @@ fun MetronTopBar(
         ) {
             // Calm Mode Quick Toggle
             IconButton(
-                onClick = onToggleCalmMode,
+                onClick = {
+                    com.metron.app.haptics.HapticsManager.tick()
+                    onToggleCalmMode()
+                },
                 modifier = Modifier
                     .size(38.dp)
                     .clip(CircleShape)
@@ -97,7 +100,10 @@ fun MetronTopBar(
 
             // Search Icon
             IconButton(
-                onClick = onSearchClick,
+                onClick = {
+                    com.metron.app.haptics.HapticsManager.tick()
+                    onSearchClick()
+                },
                 modifier = Modifier
                     .size(38.dp)
                     .clip(CircleShape)

@@ -17,5 +17,15 @@ class MetronApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+
+        // Initialize local notification channels
+        com.metron.app.notification.MetronNotificationManager.initNotificationChannels(this)
+        if (repository.isNotificationsEnabled.value) {
+            com.metron.app.notification.MetronNotificationManager.scheduleDailyReminder(
+                this,
+                repository.dailyReminderHour.value,
+                repository.dailyReminderMinute.value
+            )
+        }
     }
 }

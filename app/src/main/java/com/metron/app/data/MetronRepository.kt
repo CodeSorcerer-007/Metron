@@ -15,7 +15,7 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
 
-class MetronRepository(context: Context) {
+class MetronRepository(val context: Context) {
 
     private val dbHelper = MetronDatabaseHelper(context.applicationContext)
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -47,6 +47,21 @@ class MetronRepository(context: Context) {
     private val _isCalmMode = MutableStateFlow(false)
     val isCalmMode: StateFlow<Boolean> = _isCalmMode.asStateFlow()
 
+    private val _isHapticsEnabled = MutableStateFlow(true)
+    val isHapticsEnabled: StateFlow<Boolean> = _isHapticsEnabled.asStateFlow()
+
+    private val _isNotificationsEnabled = MutableStateFlow(true)
+    val isNotificationsEnabled: StateFlow<Boolean> = _isNotificationsEnabled.asStateFlow()
+
+    private val _isOnboardingCompleted = MutableStateFlow(false)
+    val isOnboardingCompleted: StateFlow<Boolean> = _isOnboardingCompleted.asStateFlow()
+
+    private val _dailyReminderHour = MutableStateFlow(20)
+    val dailyReminderHour: StateFlow<Int> = _dailyReminderHour.asStateFlow()
+
+    private val _dailyReminderMinute = MutableStateFlow(30)
+    val dailyReminderMinute: StateFlow<Int> = _dailyReminderMinute.asStateFlow()
+
     private var lastDeletedTransaction: Transaction? = null
 
     init {
@@ -76,6 +91,11 @@ class MetronRepository(context: Context) {
                     "currency_code" -> _currencyCode.value = value
                     "theme_mode" -> _themeMode.value = value
                     "calm_mode" -> _isCalmMode.value = (value == "1")
+                    "onboarding_completed" -> _isOnboardingCompleted.value = (value == "1")
+                    "haptics_enabled" -> _isHapticsEnabled.value = (value == "1")
+                    "notifications_enabled" -> _isNotificationsEnabled.value = (value == "1")
+                    "daily_reminder_hour" -> _dailyReminderHour.value = value.toIntOrNull() ?: 20
+                    "daily_reminder_minute" -> _dailyReminderMinute.value = value.toIntOrNull() ?: 30
                 }
             }
         }
@@ -179,6 +199,8 @@ class MetronRepository(context: Context) {
         )
         cursor.use {
             while (it.moveToNext()) {
+                val receiptIdx = it.getColumnIndex("receipt_path")
+                val receipt = if (receiptIdx != -1 && !it.isNull(receiptIdx)) it.getString(receiptIdx) else null
                 list.add(
                     Transaction(
                         id = it.getLong(it.getColumnIndexOrThrow("id")),
@@ -192,6 +214,7 @@ class MetronRepository(context: Context) {
                         notes = it.getString(it.getColumnIndexOrThrow("notes")),
                         tag = it.getString(it.getColumnIndexOrThrow("tag")),
                         currency = it.getString(it.getColumnIndexOrThrow("currency")),
+                        receiptPath = receipt,
                         createdAt = it.getLong(it.getColumnIndexOrThrow("created_at"))
                     )
                 )
@@ -260,6 +283,7 @@ class MetronRepository(context: Context) {
             put("notes", tx.notes.trim())
             put("tag", tx.tag.trim())
             put("currency", _currencyCode.value)
+            if (tx.receiptPath != null) put("receipt_path", tx.receiptPath) else putNull("receipt_path")
             put("created_at", System.currentTimeMillis())
         }
         val id = db.insert(MetronDatabaseHelper.TABLE_TRANSACTIONS, null, cv)
@@ -279,6 +303,7 @@ class MetronRepository(context: Context) {
             put("merchant", tx.merchant.trim())
             put("notes", tx.notes.trim())
             put("tag", tx.tag.trim())
+            if (tx.receiptPath != null) put("receipt_path", tx.receiptPath) else putNull("receipt_path")
         }
         db.update(MetronDatabaseHelper.TABLE_TRANSACTIONS, cv, "id = ?", arrayOf(tx.id.toString()))
         reloadAll()
@@ -492,6 +517,65 @@ class MetronRepository(context: Context) {
         _isCalmMode.value = enabled
     }
 
+    fun setHapticsEnabled(enabled: Boolean) {
+        setPreference("haptics_enabled", if (enabled) "1" else "0")
+        _isHapticsEnabled.value = enabled
+    }
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        setPreference("notifications_enabled", if (enabled) "1" else "0")
+        _isNotificationsEnabled.value = enabled
+        if (enabled) {
+            com.metron.app.notification.MetronNotificationManager.scheduleDailyReminder(
+                context, _dailyReminderHour.value, _dailyReminderMinute.value
+            )
+        } else {
+            com.metron.app.notification.MetronNotificationManager.cancelDailyReminder(context)
+        }
+    }
+
+    fun setDailyReminderTime(hour: Int, minute: Int) {
+        setPreference("daily_reminder_hour", hour.toString())
+        setPreference("daily_reminder_minute", minute.toString())
+        _dailyReminderHour.value = hour
+        _dailyReminderMinute.value = minute
+        if (_isNotificationsEnabled.value) {
+            com.metron.app.notification.MetronNotificationManager.scheduleDailyReminder(
+                context, hour, minute
+            )
+        }
+    }
+
+    fun setOnboardingCompleted(completed: Boolean) {
+        setPreference("onboarding_completed", if (completed) "1" else "0")
+        _isOnboardingCompleted.value = completed
+    }
+
+    fun saveReceiptImage(inputStream: java.io.InputStream): String? {
+        return try {
+            val dir = java.io.File(context.filesDir, "receipts")
+            if (!dir.exists()) dir.mkdirs()
+            val file = java.io.File(dir, "receipt_${System.currentTimeMillis()}.jpg")
+            file.outputStream().use { out ->
+                inputStream.copyTo(out)
+            }
+            file.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    fun deleteReceiptImage(path: String?) {
+        if (path.isNullOrBlank()) return
+        try {
+            val file = java.io.File(path)
+            if (file.exists()) file.delete()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     private fun setPreference(key: String, value: String) {
         val db = dbHelper.writableDatabase
         val cv = ContentValues().apply {
@@ -637,6 +721,7 @@ class MetronRepository(context: Context) {
                 put("notes", t.notes)
                 put("tag", t.tag)
                 put("currency", t.currency)
+                if (t.receiptPath != null) put("receiptPath", t.receiptPath)
             }
             txsArray.put(o)
         }
@@ -774,6 +859,7 @@ class MetronRepository(context: Context) {
                             put("notes", o.optString("notes", ""))
                             put("tag", o.optString("tag", ""))
                             put("currency", o.optString("currency", "INR"))
+                            if (o.has("receiptPath")) put("receipt_path", o.getString("receiptPath")) else putNull("receipt_path")
                             put("created_at", System.currentTimeMillis())
                         }
                         db.insert(MetronDatabaseHelper.TABLE_TRANSACTIONS, null, cv)

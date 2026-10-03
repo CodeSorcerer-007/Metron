@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.metron.app.haptics.HapticsManager
 import com.metron.app.model.*
 import com.metron.app.theme.*
 import com.metron.app.ui.components.MetronTopBar
@@ -38,7 +39,8 @@ fun HomeScreen(
     onAddClick: () -> Unit,
     onDeleteTransaction: (Long) -> Unit,
     onDuplicateTransaction: (Long) -> Unit,
-    onViewAllTransactions: () -> Unit
+    onViewAllTransactions: () -> Unit,
+    onEditTransaction: (Transaction) -> Unit = {}
 ) {
     var selectedFilter by remember { mutableStateOf(TimeFilter.THIS_MONTH) }
 
@@ -125,6 +127,37 @@ fun HomeScreen(
         }
     }
 
+    // Dynamic Hellenic Greeting & Philosophical Wisdom
+    val hourOfDay = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+    val (greetingTitle, greetingGreek, hellenicQuote, quoteAuthor) = remember(hourOfDay) {
+        when (hourOfDay) {
+            in 5..11 -> listOf(
+                "Good Morning",
+                "Kaliméra • Καλημέρα",
+                "He who is not contented with what he has, would not be contented with what he would like to have.",
+                "Socrates"
+            )
+            in 12..16 -> listOf(
+                "Good Afternoon",
+                "Kaló Mesiméri • Καλό Μεσημέρι",
+                "Wealth consists not in having great possessions, but in having few wants.",
+                "Epictetus"
+            )
+            in 17..21 -> listOf(
+                "Good Evening",
+                "Kalispera • Καλησπέρα",
+                "Measure in all things is best. Moderation brings lasting peace.",
+                "Cleobulus of Lindos"
+            )
+            else -> listOf(
+                "Peaceful Night",
+                "Kalinýchta • Καληνύχτα",
+                "Do not speak unless you can improve on the silence of the night.",
+                "Pythagoras"
+            )
+        }
+    }
+
     Scaffold(
         topBar = {
             MetronTopBar(
@@ -142,6 +175,54 @@ fun HomeScreen(
             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Hellenic Time-of-Day Greeting & Ancient Philosophy
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, GoldPrimary.copy(alpha = 0.25f), RoundedCornerShape(20.dp)),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = greetingTitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = greetingGreek,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = GoldPrimary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "“$hellenicQuote”",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 18.sp,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "— $quoteAuthor",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = GoldPrimary.copy(alpha = 0.85f),
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.align(Alignment.End)
+                        )
+                    }
+                }
+            }
+
             // Hero Spending Card
             item {
                 PrimarySpendingCard(
@@ -317,7 +398,7 @@ fun HomeScreen(
                         currencySymbol = currencySymbol,
                         onDelete = { onDeleteTransaction(tx.id) },
                         onDuplicate = { onDuplicateTransaction(tx.id) },
-                        onEdit = { /* Edit flow */ }
+                        onEdit = { onEditTransaction(tx) }
                     )
                 }
             }

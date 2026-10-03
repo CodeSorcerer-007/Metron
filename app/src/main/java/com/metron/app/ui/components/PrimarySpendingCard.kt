@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.metron.app.haptics.HapticsManager
 import com.metron.app.model.TimeFilter
 import com.metron.app.theme.*
 
@@ -88,7 +89,10 @@ fun PrimarySpendingCard(
                             .weight(1f)
                             .clip(RoundedCornerShape(9.dp))
                             .background(if (isSelected) GoldPrimary else Color.Transparent)
-                            .clickable { onFilterSelected(filter) }
+                            .clickable {
+                                HapticsManager.tick()
+                                onFilterSelected(filter)
+                            }
                             .padding(vertical = 6.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -125,13 +129,15 @@ fun PrimarySpendingCard(
                     color = GoldPrimary,
                     modifier = Modifier.padding(bottom = 4.dp, end = 4.dp)
                 )
-                Text(
-                    text = String.format("%,.2f", totalSpent),
-                    fontSize = 36.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    letterSpacing = (-0.5).sp
-                )
+                AnimatedContent(targetState = totalSpent, label = "spentAnim") { spent ->
+                    Text(
+                        text = String.format("%,.2f", spent),
+                        fontSize = 36.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        letterSpacing = (-0.5).sp
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(14.dp))

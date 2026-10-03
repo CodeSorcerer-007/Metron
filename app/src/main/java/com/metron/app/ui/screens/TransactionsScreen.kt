@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.metron.app.haptics.HapticsManager
 import com.metron.app.model.*
 import com.metron.app.theme.*
 import com.metron.app.ui.components.TransactionListItem
@@ -34,6 +35,7 @@ fun TransactionsScreen(
     currencySymbol: String,
     onDeleteTransaction: (Long) -> Unit,
     onDuplicateTransaction: (Long) -> Unit,
+    onEditTransaction: (Transaction) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -129,7 +131,10 @@ fun TransactionsScreen(
                     item {
                         FilterChip(
                             selected = selectedTypeFilter == null,
-                            onClick = { selectedTypeFilter = null },
+                            onClick = {
+                                HapticsManager.tick()
+                                selectedTypeFilter = null
+                            },
                             label = { Text("All") },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = GoldPrimary,
@@ -141,7 +146,10 @@ fun TransactionsScreen(
                         val isSelected = selectedTypeFilter == type
                         FilterChip(
                             selected = isSelected,
-                            onClick = { selectedTypeFilter = if (isSelected) null else type },
+                            onClick = {
+                                HapticsManager.tick()
+                                selectedTypeFilter = if (isSelected) null else type
+                            },
                             label = { Text(type.title) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = GoldPrimary,
@@ -231,7 +239,7 @@ fun TransactionsScreen(
                             currencySymbol = currencySymbol,
                             onDelete = { onDeleteTransaction(tx.id) },
                             onDuplicate = { onDuplicateTransaction(tx.id) },
-                            onEdit = { /* Edit flow */ }
+                            onEdit = { onEditTransaction(tx) }
                         )
                     }
                 }

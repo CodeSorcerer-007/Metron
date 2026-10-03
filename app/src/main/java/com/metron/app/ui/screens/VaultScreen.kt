@@ -3,7 +3,11 @@ package com.metron.app.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +27,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import com.metron.app.MetronApp
+import com.metron.app.haptics.HapticsManager
 import com.metron.app.model.Account
 import com.metron.app.model.AccountType
 import com.metron.app.theme.*
@@ -48,6 +55,13 @@ fun VaultScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val repo = MetronApp.repository
+
+    val isHapticsEnabled by repo.isHapticsEnabled.collectAsState()
+    val isNotificationsEnabled by repo.isNotificationsEnabled.collectAsState()
+    val dailyReminderHour by repo.dailyReminderHour.collectAsState()
+    val dailyReminderMinute by repo.dailyReminderMinute.collectAsState()
+
     var showCurrencyDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showAddAccountDialog by remember { mutableStateOf(false) }
@@ -56,6 +70,19 @@ fun VaultScreen(
     var showClearConfirmDialog by remember { mutableStateOf(false) }
     var exportDataString by remember { mutableStateOf("") }
     var importInputString by remember { mutableStateOf("") }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            repo.setNotificationsEnabled(true)
+            HapticsManager.success()
+            Toast.makeText(context, "Daily mindful check-in reminders active!", Toast.LENGTH_SHORT).show()
+        } else {
+            repo.setNotificationsEnabled(false)
+            Toast.makeText(context, "Notification permission needed for reminders", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val totalNetWorth = remember(accounts) {
         accounts.sumOf { it.currentBalance }
@@ -306,9 +333,167 @@ fun VaultScreen(
                         }
                         Switch(
                             checked = isCalmMode,
-                            onCheckedChange = { onToggleCalmMode() },
+                            onCheckedChange = {
+                                HapticsManager.tick()
+                                onToggleCalmMode()
+                            },
                             colors = SwitchDefaults.colors(checkedThumbColor = GoldPrimary, checkedTrackColor = GoldDark)
                         )
+                    }
+                }
+            }
+
+            // Hardware Vibrations & Tactile Haptics Switch
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Default.Vibration, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Hardware Tactile Haptics", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                                Text("Vibrations on keypad, buttons & transaction actions", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Switch(
+                            checked = isHapticsEnabled,
+                            onCheckedChange = {
+                                repo.setHapticsEnabled(it)
+                                if (it) HapticsManager.success()
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = GoldPrimary, checkedTrackColor = GoldDark)
+                        )
+                    }
+                }
+            }
+
+            // Daily Mindful Reminder Notification
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Icon(Icons.Default.NotificationsActive, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Daily Mindful Check-in", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                                    Text("Offline local alarm reminding you to balance your ledger", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            Switch(
+                                checked = isNotificationsEnabled,
+                                onCheckedChange = { enable ->
+                                    if (enable) {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                            if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                                                repo.setNotificationsEnabled(true)
+                                                HapticsManager.success()
+                                            } else {
+                                                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                            }
+                                        } else {
+                                            repo.setNotificationsEnabled(true)
+                                            HapticsManager.success()
+                                        }
+                                    } else {
+                                        repo.setNotificationsEnabled(false)
+                                        HapticsManager.click()
+                                    }
+                                },
+                                colors = SwitchDefaults.colors(checkedThumbColor = GoldPrimary, checkedTrackColor = GoldDark)
+                            )
+                        }
+
+                        if (isNotificationsEnabled) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            val amPm = if (dailyReminderHour >= 12) "PM" else "AM"
+                            val displayHour = if (dailyReminderHour % 12 == 0) 12 else dailyReminderHour % 12
+                            val displayMin = String.format("%02d", dailyReminderMinute)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .clickable {
+                                        HapticsManager.tick()
+                                        android.app.TimePickerDialog(
+                                            context,
+                                            { _, h, m ->
+                                                repo.setDailyReminderTime(h, m)
+                                                HapticsManager.click()
+                                            },
+                                            dailyReminderHour,
+                                            dailyReminderMinute,
+                                            false
+                                        ).show()
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Scheduled Reminder Time",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "$displayHour:$displayMin $amPm (Tap to change)",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = GoldPrimary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Revisit Metron Guide / Interactive Tour
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            HapticsManager.click()
+                            repo.setOnboardingCompleted(false)
+                        },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.School, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Revisit Metron Guide & Tour", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                                Text("Replay the interactive onboarding introduction", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
