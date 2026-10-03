@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy | Metron: Expense Tracker</title>
+    <style>
+        :root {
+            --bg-color: #0b1329;
+            --card-bg: #121d3a;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent: #38bdf8;
+            --border: #1e293b;
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 820px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 48px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+        .header {
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 24px;
+            margin-bottom: 32px;
+        }
+        .header h1 {
+            font-size: 2rem;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        .header .meta {
+            color: var(--accent);
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+        h2 {
+            font-size: 1.35rem;
+            color: var(--accent);
+            margin-top: 32px;
+            margin-bottom: 12px;
+        }
+        p, li {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            margin-bottom: 14px;
+        }
+        ul {
+            padding-left: 24px;
+            margin-bottom: 18px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .highlight-box {
+            background: rgba(56, 189, 248, 0.08);
+            border-left: 4px solid var(--accent);
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin: 24px 0;
+        }
+        .highlight-box p {
+            color: #e2e8f0;
+            margin: 0;
+        }
+        footer {
+            margin-top: 48px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Privacy Policy</h1>
+            <div class="meta">Metron: Expense Tracker (com.codesorcerer.metron) &bull; Last Updated: October 3, 2026</div>
+        </div>
+
+        <div class="highlight-box">
+            <p><strong>Summary:</strong> Metron is a 100% offline, privacy-first personal finance application. We do not collect, transmit, sell, or share any of your personal, financial, or device data. All your data stays strictly on your physical device.</p>
+        </div>
+
+        <h2>1. Information We Do Not Collect</h2>
+        <p>Unlike traditional finance apps, Metron does not have remote servers, accounts, or analytics tracking. Specifically:</p>
+        <ul>
+            <li><strong>No Account Registration:</strong> You do not need to create an account, log in, or provide your email, phone number, or name.</li>
+            <li><strong>No Financial Syncing:</strong> Metron does not connect to your bank accounts, credit card portals, or any financial APIs.</li>
+            <li><strong>No Telemetry or Analytics:</strong> We do not include third-party SDKs, tracking pixels, cookies, crash reporting frameworks, or behavioral telemetry tools.</li>
+            <li><strong>No Advertising Networks:</strong> Metron is completely ad-free and contains no ad networks or user profiling trackers.</li>
+        </ul>
+
+        <h2>2. Data Stored Locally on Your Device</h2>
+        <p>All information entered into Metron is stored exclusively within your device's private, encrypted internal sandbox:</p>
+        <ul>
+            <li><strong>Transactions & Budgets:</strong> Transaction records, custom categories, account balances, and budget configurations are stored locally in an on-device SQLite database.</li>
+            <li><strong>Receipt Photos:</strong> Photos or attachments you capture are downscaled and saved exclusively in the app's local internal storage folder. They are never uploaded to the cloud or shared with third parties.</li>
+            <li><strong>Data Backups:</strong> If you export your data via JSON backup or CSV export, the exported file is saved locally to the directory you choose on your device. You maintain full ownership and control over where that file is shared.</li>
+        </ul>
+
+        <h2>3. Device Permissions</h2>
+        <p>Metron requests the minimum set of permissions necessary to deliver local functionality:</p>
+        <ul>
+            <li><strong>Camera / Photo Library:</strong> Used solely to allow you to take a photo of a receipt or choose an existing photo to attach to a transaction. Images never leave your device.</li>
+            <li><strong>Notifications (POST_NOTIFICATIONS):</strong> Optional permission used solely to deliver local on-device budget warning reminders or recurring transaction reminders. No remote push notifications are used.</li>
+        </ul>
+
+        <h2>4. Third-Party Services & Links</h2>
+        <p>Metron does not sell, trade, or transfer your data to outside parties. The app does not integrate with third-party cloud data processors, advertising vendors, or data brokers.</p>
+
+        <h2>5. Children's Privacy</h2>
+        <p>Metron does not address anyone under the age of 13. We do not knowingly collect personal identifiable information from children, nor does the app communicate with any remote servers.</p>
+
+        <h2>6. Changes to This Privacy Policy</h2>
+        <p>We may update our Privacy Policy from time to time. Any changes will be posted to this page with an updated revision date.</p>
+
+        <h2>7. Contact Us</h2>
+        <p>If you have any questions or feedback regarding this Privacy Policy, please contact the developer at:</p>
+        <p><strong>Developer:</strong> CodeSorcerer<br>
+        <strong>Email:</strong> codesorcerer.dev@gmail.com<br>
+        <strong>Project Repository:</strong> <a href="https://github.com/CodeSorcerer-007/Metron" style="color: var(--accent); text-decoration: none;">github.com/CodeSorcerer-007/Metron</a></p>
+
+        <footer>
+            &copy; 2026 Metron. All rights reserved. 100% Offline &amp; Privacy-First.
+        </footer>
+    </div>
+</body>
+</html>
