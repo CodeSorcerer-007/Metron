@@ -78,7 +78,7 @@ private val OledBlackColorScheme = darkColorScheme(
 
 @Composable
 fun MetronTheme(
-    themeMode: String = "AEGEAN_DARK",
+    themeMode: String = "ATHENIAN_LIGHT",
     content: @Composable () -> Unit
 ) {
     val colorScheme = when (themeMode) {
@@ -90,12 +90,25 @@ fun MetronTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb()
-            window.navigationBarColor = colorScheme.background.toArgb()
-            val isLight = themeMode == "ATHENIAN_LIGHT"
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = isLight
-            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = isLight
+            var ctx = view.context
+            var activity: Activity? = null
+            while (ctx is android.content.ContextWrapper) {
+                if (ctx is Activity) {
+                    activity = ctx
+                    break
+                }
+                ctx = ctx.baseContext
+            }
+            activity?.window?.let { window ->
+                try {
+                    val isLight = themeMode == "ATHENIAN_LIGHT"
+                    val insetsController = WindowCompat.getInsetsController(window, view)
+                    insetsController.isAppearanceLightStatusBars = isLight
+                    insetsController.isAppearanceLightNavigationBars = isLight
+                } catch (e: Throwable) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 

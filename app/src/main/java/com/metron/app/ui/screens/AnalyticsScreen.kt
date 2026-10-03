@@ -1,6 +1,7 @@
 package com.metron.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -94,7 +95,7 @@ fun AnalyticsScreen(
                     fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 1.5.sp,
-                    color = GoldPrimary
+                    color = BronzeAccent
                 )
                 Text(
                     text = "Financial vision, patterns & balance",
@@ -115,21 +116,26 @@ fun AnalyticsScreen(
             // Net Balance / Cashflow Card
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, LightBorder, RoundedCornerShape(20.dp)),
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
                         Text(
                             text = "Net Cashflow Balance",
                             style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "${if (netBalance >= 0) "+" else ""}$currencySymbol${String.format("%,.2f", netBalance)}",
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold,
+                            text = "${if (netBalance >= 0) "+" else ""}$currencySymbol${String.format(Locale.getDefault(), "%,.2f", netBalance)}",
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = (-0.5).sp,
                             color = if (netBalance >= 0) LaurelGreen else SpartanRose
                         )
 
@@ -180,9 +186,12 @@ fun AnalyticsScreen(
             // Category Donut Chart
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, LightBorder, RoundedCornerShape(20.dp)),
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
                         Text(
@@ -211,13 +220,16 @@ fun AnalyticsScreen(
             if (topMerchants.isNotEmpty()) {
                 item {
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, LightBorder, RoundedCornerShape(20.dp)),
                         shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         Column(modifier = Modifier.padding(18.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Store, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.Store, contentDescription = null, tint = BronzeAccent, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "Most Frequented Merchants",

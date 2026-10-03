@@ -10,11 +10,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.metron.app.theme.GoldPrimary
+import com.metron.app.theme.*
 
 @Composable
 fun SpendingStoryCard(
@@ -24,22 +23,21 @@ fun SpendingStoryCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(22.dp))
             .border(
                 1.dp,
-                Brush.horizontalGradient(
-                    listOf(GoldPrimary.copy(alpha = 0.5f), GoldPrimary.copy(alpha = 0.1f))
-                ),
-                RoundedCornerShape(20.dp)
+                ParchmentBorder,
+                RoundedCornerShape(22.dp)
             ),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+            containerColor = ParchmentBg
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp)
+                .padding(20.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -48,15 +46,15 @@ fun SpendingStoryCard(
                 Icon(
                     imageVector = Icons.Default.AutoAwesome,
                     contentDescription = null,
-                    tint = GoldPrimary,
+                    tint = BronzeAccent,
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
                     text = "THE SPENDING STORY",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                    color = GoldPrimary
+                    letterSpacing = 1.2.sp,
+                    color = BronzeAccent
                 )
             }
 
@@ -66,7 +64,7 @@ fun SpendingStoryCard(
                 text = storyText,
                 style = MaterialTheme.typography.bodyMedium,
                 lineHeight = 22.sp,
-                color = MaterialTheme.colorScheme.onSurface
+                color = ParchmentText
             )
         }
     }

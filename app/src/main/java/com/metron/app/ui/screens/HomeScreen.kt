@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -175,14 +176,15 @@ fun HomeScreen(
             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Hellenic Time-of-Day Greeting & Ancient Philosophy
+            // Hellenic Time-of-Day Greeting & Ancient Philosophy (Parchment Tablet Style)
             item {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(1.dp, GoldPrimary.copy(alpha = 0.25f), RoundedCornerShape(20.dp)),
+                        .border(1.dp, ParchmentBorder, RoundedCornerShape(20.dp)),
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
+                    colors = CardDefaults.cardColors(containerColor = ParchmentBg),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
@@ -194,20 +196,20 @@ fun HomeScreen(
                                 text = greetingTitle,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = ParchmentText
                             )
                             Text(
                                 text = greetingGreek,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = GoldPrimary,
-                                fontWeight = FontWeight.SemiBold
+                                color = BronzeAccent,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = "“$hellenicQuote”",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = ParchmentText.copy(alpha = 0.85f),
                             lineHeight = 18.sp,
                             fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
                         )
@@ -215,8 +217,8 @@ fun HomeScreen(
                         Text(
                             text = "— $quoteAuthor",
                             style = MaterialTheme.typography.labelSmall,
-                            color = GoldPrimary.copy(alpha = 0.85f),
-                            fontWeight = FontWeight.Medium,
+                            color = BronzeAccent,
+                            fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.align(Alignment.End)
                         )
                     }
@@ -239,29 +241,29 @@ fun HomeScreen(
 
             // Actionable Insight Banner
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                        .border(1.dp, GoldPrimary.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Lightbulb,
-                        contentDescription = null,
-                        tint = GoldPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = insightText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 18.sp
-                    )
-                }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .border(1.dp, GoldBorderLight, RoundedCornerShape(16.dp))
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lightbulb,
+                            contentDescription = null,
+                            tint = BronzeAccent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = insightText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            lineHeight = 18.sp
+                        )
+                    }
             }
 
             // Quick Stats Row (Transactions count, average size, top category)
@@ -332,7 +334,7 @@ fun HomeScreen(
 
                     if (transactions.isNotEmpty()) {
                         TextButton(onClick = onViewAllTransactions) {
-                            Text(text = "View Ledger", color = GoldPrimary, fontSize = 12.sp)
+                            Text(text = "View Ledger", color = BronzeAccent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                         }
                     }
                 }
@@ -377,8 +379,8 @@ fun HomeScreen(
                             Button(
                                 onClick = onAddClick,
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = GoldPrimary,
-                                    contentColor = DarkBackground
+                                    containerColor = BronzeAccent,
+                                    contentColor = Color.White
                                 ),
                                 shape = RoundedCornerShape(12.dp)
                             ) {

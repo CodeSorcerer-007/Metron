@@ -8,6 +8,7 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,6 +30,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.metron.app.MetronApp
+import com.metron.app.backup.AutoBackupManager
+import com.metron.app.backup.LocalBackupItem
 import com.metron.app.haptics.HapticsManager
 import com.metron.app.model.Account
 import com.metron.app.model.AccountType
@@ -61,6 +64,10 @@ fun VaultScreen(
     val isNotificationsEnabled by repo.isNotificationsEnabled.collectAsState()
     val dailyReminderHour by repo.dailyReminderHour.collectAsState()
     val dailyReminderMinute by repo.dailyReminderMinute.collectAsState()
+    val isAutoBackupEnabled by repo.isAutoBackupEnabled.collectAsState()
+
+    var localBackups by remember { mutableStateOf(AutoBackupManager.listBackups(context)) }
+    var backupToRestore by remember { mutableStateOf<LocalBackupItem?>(null) }
 
     var showCurrencyDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
@@ -123,7 +130,8 @@ fun VaultScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, GoldBorderLight)
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
                         Text(
@@ -174,7 +182,8 @@ fun VaultScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, LightBorder.copy(alpha = 0.5f))
                 ) {
                     Row(
                         modifier = Modifier
@@ -255,7 +264,8 @@ fun VaultScreen(
                         .fillMaxWidth()
                         .clickable { showCurrencyDialog = true },
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, LightBorder.copy(alpha = 0.5f))
                 ) {
                     Row(
                         modifier = Modifier
@@ -281,7 +291,8 @@ fun VaultScreen(
                         .fillMaxWidth()
                         .clickable { showThemeDialog = true },
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, LightBorder.copy(alpha = 0.5f))
                 ) {
                     Row(
                         modifier = Modifier
@@ -314,7 +325,8 @@ fun VaultScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, LightBorder.copy(alpha = 0.5f))
                 ) {
                     Row(
                         modifier = Modifier
@@ -348,7 +360,8 @@ fun VaultScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, LightBorder.copy(alpha = 0.5f))
                 ) {
                     Row(
                         modifier = Modifier
@@ -382,7 +395,8 @@ fun VaultScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, LightBorder.copy(alpha = 0.5f))
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
@@ -403,7 +417,7 @@ fun VaultScreen(
                                 onCheckedChange = { enable ->
                                     if (enable) {
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                            if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                                             if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
                                                 repo.setNotificationsEnabled(true)
                                                 HapticsManager.success()
                                             } else {
@@ -476,7 +490,8 @@ fun VaultScreen(
                             repo.setOnboardingCompleted(false)
                         },
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, LightBorder.copy(alpha = 0.5f))
                 ) {
                     Row(
                         modifier = Modifier
@@ -506,6 +521,118 @@ fun VaultScreen(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+            }
+
+            // Automated Weekly Local Snapshots Card
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, LightBorder.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Icon(Icons.Default.Schedule, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Automated Weekly Snapshots", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                                    Text("Local encrypted JSON snapshots created weekly on Sunday at 2 AM (retains last 5 versions)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            Switch(
+                                checked = isAutoBackupEnabled,
+                                onCheckedChange = {
+                                    repo.setAutoBackupEnabled(it)
+                                    if (it) HapticsManager.success() else HapticsManager.tick()
+                                },
+                                colors = SwitchDefaults.colors(checkedThumbColor = GoldPrimary, checkedTrackColor = GoldDark)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        OutlinedButton(
+                            onClick = {
+                                val created = AutoBackupManager.createAutoBackup(context, repo)
+                                if (created != null) {
+                                    localBackups = AutoBackupManager.listBackups(context)
+                                    HapticsManager.success()
+                                    Toast.makeText(context, "New local snapshot created!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Failed to create snapshot", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, GoldPrimary.copy(alpha = 0.5f))
+                        ) {
+                            Icon(Icons.Default.Backup, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Create Backup Snapshot Now", color = GoldPrimary, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+
+            // Local Snapshots Archive List
+            if (localBackups.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "Local Backup Snapshots (${localBackups.size})",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                items(localBackups, key = { it.fileName }) { backup ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                        border = BorderStroke(1.dp, LightBorder.copy(alpha = 0.3f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Icon(Icons.Default.FolderZip, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = backup.formattedDate,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "${backup.formattedSize} • ${backup.fileName}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            TextButton(
+                                onClick = { backupToRestore = backup },
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(14.dp), tint = GoldPrimary)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Restore", color = GoldPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
             }
 
             // Backup JSON / CSV Actions
@@ -608,7 +735,7 @@ fun VaultScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "v1.0.0 • 100% Offline & Private",
+                        text = "v1.1.0 • 100% Offline & Private",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
@@ -669,8 +796,8 @@ fun VaultScreen(
     // Theme Picker Dialog
     if (showThemeDialog) {
         val themes = listOf(
+            Pair("ATHENIAN_LIGHT", "Athenian Light (Marble & Bronze • Recommended)"),
             Pair("AEGEAN_DARK", "Aegean Dark (Obsidian & Gold)"),
-            Pair("ATHENIAN_LIGHT", "Athenian Light (Marble & Bronze)"),
             Pair("OLED_BLACK", "OLED Pure Black (High Contrast)")
         )
 
@@ -705,6 +832,39 @@ fun VaultScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showThemeDialog = false }) { Text("Close") }
+            }
+        )
+    }
+
+    // Snapshot Restore Confirmation Dialog
+    backupToRestore?.let { backup ->
+        AlertDialog(
+            onDismissRequest = { backupToRestore = null },
+            title = { Text("Restore Local Snapshot?") },
+            text = {
+                Text("This will replace current device data with the snapshot from ${backup.formattedDate} (${backup.formattedSize}). All transactions and accounts will be updated to this point in time.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val success = AutoBackupManager.restoreBackup(repo, backup.file)
+                        if (success) {
+                            HapticsManager.success()
+                            Toast.makeText(context, "Restored snapshot successfully!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Failed to restore snapshot", Toast.LENGTH_SHORT).show()
+                        }
+                        backupToRestore = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = GoldPrimary)
+                ) {
+                    Text("Confirm Restore")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { backupToRestore = null }) {
+                    Text("Cancel")
+                }
             }
         )
     }

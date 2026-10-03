@@ -43,7 +43,7 @@ class MetronRepository(val context: Context) {
     private val _currencyCode = MutableStateFlow("INR")
     val currencyCode: StateFlow<String> = _currencyCode.asStateFlow()
 
-    private val _themeMode = MutableStateFlow("AEGEAN_DARK")
+    private val _themeMode = MutableStateFlow("ATHENIAN_LIGHT")
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
 
     private val _isCalmMode = MutableStateFlow(false)
@@ -64,6 +64,9 @@ class MetronRepository(val context: Context) {
     private val _dailyReminderMinute = MutableStateFlow(30)
     val dailyReminderMinute: StateFlow<Int> = _dailyReminderMinute.asStateFlow()
 
+    private val _isAutoBackupEnabled = MutableStateFlow(true)
+    val isAutoBackupEnabled: StateFlow<Boolean> = _isAutoBackupEnabled.asStateFlow()
+
     private var lastDeletedTransaction: Transaction? = null
 
     init {
@@ -72,12 +75,16 @@ class MetronRepository(val context: Context) {
 
     fun reloadAll() {
         scope.launch {
-            loadPreferences()
-            loadCategories()
-            loadAccounts()
-            loadTransactions()
-            loadBudgets()
-            loadRecurring()
+            try {
+                loadPreferences()
+                loadCategories()
+                loadAccounts()
+                loadTransactions()
+                loadBudgets()
+                loadRecurring()
+            } catch (e: Throwable) {
+                android.util.Log.e("MetronRepo", "Error reloading data from database", e)
+            }
         }
     }
 
@@ -98,6 +105,7 @@ class MetronRepository(val context: Context) {
                     "notifications_enabled" -> _isNotificationsEnabled.value = (value == "1")
                     "daily_reminder_hour" -> _dailyReminderHour.value = value.toIntOrNull() ?: 20
                     "daily_reminder_minute" -> _dailyReminderMinute.value = value.toIntOrNull() ?: 30
+                    "auto_backup_enabled" -> _isAutoBackupEnabled.value = (value == "1")
                 }
             }
         }
@@ -551,6 +559,14 @@ class MetronRepository(val context: Context) {
     fun setOnboardingCompleted(completed: Boolean) {
         setPreference("onboarding_completed", if (completed) "1" else "0")
         _isOnboardingCompleted.value = completed
+    }
+
+    fun setAutoBackupEnabled(enabled: Boolean) {
+        setPreference("auto_backup_enabled", if (enabled) "1" else "0")
+        _isAutoBackupEnabled.value = enabled
+        if (enabled) {
+            com.metron.app.backup.AutoBackupManager.scheduleWeeklyAutoBackup(context)
+        }
     }
 
     fun saveReceiptImage(inputStream: java.io.InputStream): String? {

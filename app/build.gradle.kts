@@ -20,8 +20,8 @@ android {
         applicationId = "com.codesorcerer.metron"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.1.0"
     }
 
     signingConfigs {
@@ -42,8 +42,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("release")
         }
@@ -116,4 +116,15 @@ dependencies {
 
   // Icons Extended
   implementation(libs.androidx.compose.material.icons.extended)
+
+  // ML Kit Offline Text Recognition for Receipts
+  implementation("com.google.mlkit:text-recognition:16.0.1")
+
+  // Jetpack Glance for modern Compose AppWidget
+  implementation("androidx.glance:glance-appwidget:1.1.1")
+  implementation("androidx.glance:glance-material3:1.1.1")
+
+  // Room Database
+  implementation("androidx.room:room-runtime:2.6.1")
+  implementation("androidx.room:room-ktx:2.6.1")
 }

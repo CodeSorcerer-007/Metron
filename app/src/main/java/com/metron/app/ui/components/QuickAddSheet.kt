@@ -33,8 +33,11 @@ import androidx.compose.ui.unit.sp
 import com.metron.app.MetronApp
 import com.metron.app.haptics.HapticsManager
 import com.metron.app.model.*
+import com.metron.app.ocr.ReceiptOcrParser
 import com.metron.app.theme.*
+import kotlinx.coroutines.launch
 import java.io.File
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,6 +53,7 @@ fun QuickAddSheet(
 ) {
     val context = LocalContext.current
     val repo = MetronApp.repository
+    val scope = rememberCoroutineScope()
 
     var amountString by remember { mutableStateOf("") }
     var selectedType by remember { mutableStateOf(TransactionType.EXPENSE) }
@@ -63,20 +67,54 @@ fun QuickAddSheet(
     var receiptPath by remember { mutableStateOf<String?>(null) }
     var showExtraDetails by remember { mutableStateOf(false) }
 
+    var isOcrScanning by remember { mutableStateOf(false) }
+    var ocrFeedbackText by remember { mutableStateOf<String?>(null) }
+
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
-            try {
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    val path = repo.saveReceiptImage(stream)
-                    if (path != null) {
-                        receiptPath = path
+            scope.launch {
+                isOcrScanning = true
+                ocrFeedbackText = "Analyzing receipt offline..."
+                try {
+                    context.contentResolver.openInputStream(uri)?.use { stream ->
+                        val path = repo.saveReceiptImage(stream)
+                        if (path != null) {
+                            receiptPath = path
+                        }
+                    }
+
+                    // Run on-device OCR
+                    val ocrResult = ReceiptOcrParser.parseReceipt(context, uri)
+                    if (ocrResult.amount != null && ocrResult.amount > 0.0) {
+                        amountString = if (ocrResult.amount % 1.0 == 0.0) {
+                            ocrResult.amount.toInt().toString()
+                        } else {
+                            String.format(Locale.US, "%.2f", ocrResult.amount)
+                        }
+                    }
+                    if (!ocrResult.merchant.isNullOrBlank()) {
+                        merchantText = ocrResult.merchant
+                        val inferredCat = onSuggestCategory(ocrResult.merchant)
+                        if (inferredCat != null) selectedCategory = inferredCat
+                        val inferredAcc = onSuggestAccount(ocrResult.merchant)
+                        if (inferredAcc != null) selectedAccount = inferredAcc
+                    }
+
+                    if (ocrResult.amount != null || ocrResult.merchant != null) {
+                        ocrFeedbackText = "✨ Scanned: ${ocrResult.merchant ?: "Receipt"} ($currencySymbol${ocrResult.amount ?: ""})"
+                        HapticsManager.success()
+                    } else {
+                        ocrFeedbackText = "Photo attached (details could not be auto-detected)"
                         HapticsManager.click()
                     }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    ocrFeedbackText = null
+                } finally {
+                    isOcrScanning = false
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
             }
         }
     }
@@ -99,7 +137,7 @@ fun QuickAddSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surface,
-        dragHandle = { BottomSheetDefaults.DragHandle(color = GoldPrimary.copy(alpha = 0.5f)) }
+        dragHandle = { BottomSheetDefaults.DragHandle(color = BronzeAccent.copy(alpha = 0.5f)) }
     ) {
         Column(
             modifier = Modifier
@@ -146,9 +184,9 @@ fun QuickAddSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Large tactile Amount Display
+            // Large tactile Amount Display in Helvetica
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
@@ -158,15 +196,15 @@ fun QuickAddSheet(
                     text = currencySymbol,
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
-                    color = GoldPrimary,
+                    color = BronzeAccent,
                     modifier = Modifier.padding(end = 4.dp)
                 )
                 Text(
                     text = if (amountString.isEmpty()) "0" else amountString,
                     fontSize = 44.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = if (amountString.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface,
-                    letterSpacing = (-0.5).sp
+                    color = if (amountString.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f) else MaterialTheme.colorScheme.onSurface,
+                    letterSpacing = (-0.6).sp
                 )
             }
 
@@ -182,33 +220,34 @@ fun QuickAddSheet(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(10.dp))
-                            .border(1.dp, GoldPrimary.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .border(1.dp, GoldBorderLight, RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
                             .clickable {
                                 HapticsManager.tick()
                                 val current = amountString.toDoubleOrNull() ?: 0.0
                                 amountString = (current + bump).toInt().toString()
                             }
-                            .padding(vertical = 6.dp),
+                            .padding(vertical = 7.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "+$bump",
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = GoldPrimary
+                            fontWeight = FontWeight.Bold,
+                            color = BronzeAccent
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Category Selector Chips
             if (selectedType != TransactionType.TRANSFER) {
                 Text(
                     text = "Category",
                     style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -256,18 +295,17 @@ fun QuickAddSheet(
                 value = merchantText,
                 onValueChange = { newText ->
                     merchantText = newText
-                    // Auto infer category & account if user enters known merchant
                     val inferredCat = onSuggestCategory(newText)
                     if (inferredCat != null) selectedCategory = inferredCat
                     val inferredAcc = onSuggestAccount(newText)
                     if (inferredAcc != null) selectedAccount = inferredAcc
                 },
-                placeholder = { Text(if (selectedType == TransactionType.INCOME) "Source (e.g. Salary, Client)" else "Merchant (e.g. Coffee, Swiggy)") },
+                placeholder = { Text(if (selectedType == TransactionType.INCOME) "Source (e.g. Salary, Client)" else "Merchant (e.g. Coffee, Market)") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = GoldPrimary,
+                    focusedBorderColor = BronzeAccent,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
                 )
             )
@@ -283,7 +321,7 @@ fun QuickAddSheet(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f))
                                 .clickable {
                                     HapticsManager.tick()
                                     merchantText = merchant
@@ -292,11 +330,12 @@ fun QuickAddSheet(
                                     val inferredAcc = onSuggestAccount(merchant)
                                     if (inferredAcc != null) selectedAccount = inferredAcc
                                 }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .padding(horizontal = 9.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = merchant,
                                 fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -315,6 +354,7 @@ fun QuickAddSheet(
                 Text(
                     text = if (selectedType == TransactionType.TRANSFER) "From Account" else "Payment Method",
                     style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -360,6 +400,7 @@ fun QuickAddSheet(
                 Text(
                     text = "To Account",
                     style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -400,7 +441,7 @@ fun QuickAddSheet(
                 }
             }
 
-            // Expandable Notes & Receipt
+            // Expandable Notes & Receipt with Offline OCR
             Spacer(modifier = Modifier.height(10.dp))
             Row(
                 modifier = Modifier
@@ -414,15 +455,15 @@ fun QuickAddSheet(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = if (showExtraDetails) "Hide notes & receipt" else "+ Add note & receipt",
+                    text = if (showExtraDetails) "Hide notes & receipt" else "+ Add note & receipt photo (Offline OCR)",
                     fontSize = 12.sp,
-                    color = GoldPrimary,
-                    fontWeight = FontWeight.Medium
+                    color = BronzeAccent,
+                    fontWeight = FontWeight.SemiBold
                 )
                 Icon(
                     imageVector = if (showExtraDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                     contentDescription = null,
-                    tint = GoldPrimary,
+                    tint = BronzeAccent,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -440,10 +481,39 @@ fun QuickAddSheet(
                         maxLines = 2,
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = GoldPrimary,
+                            focusedBorderColor = BronzeAccent,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline
                         )
                     )
+
+                    // OCR Scanning Feedback Badge
+                    if (isOcrScanning) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(AegeanAzureContainer)
+                                .padding(8.dp)
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = AegeanAzure)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Analyzing receipt offline with ML Kit...", fontSize = 11.sp, color = AegeanAzure, fontWeight = FontWeight.Medium)
+                        }
+                    } else if (!ocrFeedbackText.isNullOrBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(LaurelGreenContainer)
+                                .padding(8.dp)
+                        ) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = LaurelGreen, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(ocrFeedbackText!!, fontSize = 11.sp, color = LaurelGreen, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
 
                     // Receipt attachment button / preview
                     if (!receiptPath.isNullOrBlank() && File(receiptPath!!).exists()) {
@@ -470,13 +540,13 @@ fun QuickAddSheet(
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Receipt Photo Attached",
+                                    text = "Receipt Attached",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = LaurelGreen
                                 )
                                 Text(
-                                    text = "Stored securely on device",
+                                    text = "Stored privately on device",
                                     fontSize = 10.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -485,6 +555,7 @@ fun QuickAddSheet(
                                 onClick = {
                                     repo.deleteReceiptImage(receiptPath)
                                     receiptPath = null
+                                    ocrFeedbackText = null
                                     HapticsManager.click()
                                 },
                                 modifier = Modifier.size(28.dp)
@@ -507,9 +578,9 @@ fun QuickAddSheet(
                             shape = RoundedCornerShape(10.dp),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                         ) {
-                            Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(16.dp), tint = GoldPrimary)
+                            Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(16.dp), tint = BronzeAccent)
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Attach Receipt / Bill Photo", fontSize = 12.sp, color = GoldPrimary)
+                            Text("Scan Receipt Photo (Offline OCR)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = BronzeAccent)
                         }
                     }
                 }
@@ -540,6 +611,7 @@ fun QuickAddSheet(
                                     .weight(1f)
                                     .height(48.dp)
                                     .clip(RoundedCornerShape(12.dp))
+                                    .border(1.dp, LightBorder, RoundedCornerShape(12.dp))
                                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
                                     .clickable {
                                         HapticsManager.tick()
@@ -555,7 +627,6 @@ fun QuickAddSheet(
                                                 }
                                             }
                                             else -> {
-                                                // Prevent unreasonable digit lengths
                                                 if (amountString.length < 9) {
                                                     amountString += key
                                                 }
@@ -611,8 +682,8 @@ fun QuickAddSheet(
                     .height(54.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = GoldPrimary,
-                    contentColor = DarkBackground,
+                    containerColor = BronzeAccent,
+                    contentColor = Color.White,
                     disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                     disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                 )

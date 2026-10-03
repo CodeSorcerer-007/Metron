@@ -1,6 +1,7 @@
 package com.metron.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -81,7 +82,7 @@ fun BudgetsScreen(
                     fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 1.5.sp,
-                    color = GoldPrimary
+                    color = BronzeAccent
                 )
                 Text(
                     text = "Budgets, daily discipline & recurring cycles",
@@ -102,9 +103,12 @@ fun BudgetsScreen(
             // Overall Monthly Pillar Card
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, LightBorder, RoundedCornerShape(22.dp)),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
                         Row(
@@ -119,31 +123,32 @@ fun BudgetsScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             IconButton(onClick = { showEditOverallBudgetDialog = true }) {
-                                Icon(Icons.Default.Edit, contentDescription = "Edit Budget", tint = GoldPrimary, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.Edit, contentDescription = "Edit Budget", tint = BronzeAccent, modifier = Modifier.size(18.dp))
                             }
                         }
 
                         val progress = if (overallBudget > 0) (totalMonthSpent / overallBudget).toFloat().coerceIn(0f, 1f) else 0f
-                        val pColor = if (progress > 0.9f) SpartanRose else GoldPrimary
+                        val pColor = if (progress > 0.9f) SpartanRose else BronzeAccent
 
                         Spacer(modifier = Modifier.height(4.dp))
 
                         Row(verticalAlignment = Alignment.Bottom) {
                             Text(
-                                text = "$currencySymbol${String.format("%,.0f", overallRemaining)}",
-                                fontSize = 30.sp,
-                                fontWeight = FontWeight.Bold,
+                                text = "$currencySymbol${String.format(Locale.getDefault(), "%,.0f", overallRemaining)}",
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = (-0.5).sp,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = " left of $currencySymbol${String.format("%,.0f", overallBudget)}",
+                                text = " left of $currencySymbol${String.format(Locale.getDefault(), "%,.0f", overallBudget)}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = 4.dp, start = 4.dp)
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
                         LinearProgressIndicator(
                             progress = { progress },
@@ -157,22 +162,23 @@ fun BudgetsScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // Daily Allowance Banner
+                        // Daily Allowance Banner in Parchment styling
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(GoldPrimary.copy(alpha = 0.1f))
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                .background(ParchmentBg)
+                                .border(1.dp, ParchmentBorder, RoundedCornerShape(12.dp))
+                                .padding(horizontal = 12.dp, vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.CalendarToday, contentDescription = null, tint = GoldPrimary, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.CalendarToday, contentDescription = null, tint = BronzeAccent, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "$currencySymbol${String.format("%,.0f", dailyAllowance)} / day remaining for the next $daysRemaining days",
+                                text = "$currencySymbol${String.format(Locale.getDefault(), "%,.0f", dailyAllowance)} / day remaining for the next $daysRemaining days",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = GoldPrimary
+                                color = ParchmentText
                             )
                         }
                     }

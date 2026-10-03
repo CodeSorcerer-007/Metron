@@ -93,7 +93,7 @@ fun TransactionsScreen(
                     fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 1.5.sp,
-                    color = GoldPrimary
+                    color = BronzeAccent
                 )
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -113,10 +113,10 @@ fun TransactionsScreen(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(16.dp),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = GoldPrimary,
+                        focusedBorderColor = BronzeAccent,
                         unfocusedBorderColor = MaterialTheme.colorScheme.outline
                     )
                 )
@@ -135,10 +135,10 @@ fun TransactionsScreen(
                                 HapticsManager.tick()
                                 selectedTypeFilter = null
                             },
-                            label = { Text("All") },
+                            label = { Text("All", fontWeight = if (selectedTypeFilter == null) FontWeight.Bold else FontWeight.Normal) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = GoldPrimary,
-                                selectedLabelColor = DarkBackground
+                                selectedContainerColor = BronzeAccent,
+                                selectedLabelColor = Color.White
                             )
                         )
                     }
@@ -150,10 +150,10 @@ fun TransactionsScreen(
                                 HapticsManager.tick()
                                 selectedTypeFilter = if (isSelected) null else type
                             },
-                            label = { Text(type.title) },
+                            label = { Text(type.title, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = GoldPrimary,
-                                selectedLabelColor = DarkBackground
+                                selectedContainerColor = BronzeAccent,
+                                selectedLabelColor = Color.White
                             )
                         )
                     }

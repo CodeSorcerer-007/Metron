@@ -10,22 +10,35 @@ class MetronAlarmReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_DAILY_REMINDER = "com.metron.app.ACTION_DAILY_REMINDER"
         const val ACTION_BILL_REMINDER = "com.metron.app.ACTION_BILL_REMINDER"
+        const val ACTION_AUTO_BACKUP = "com.metron.app.ACTION_AUTO_BACKUP"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        val repo = MetronApp.repository
-        val isNotifsEnabled = repo.isNotificationsEnabled.value
-        if (!isNotifsEnabled) return
+        try {
+            val repo = MetronApp.repository
 
-        when (intent.action) {
-            ACTION_DAILY_REMINDER -> {
-                MetronNotificationManager.showDailyReminderNotification(context)
+            if (intent.action == ACTION_AUTO_BACKUP) {
+                if (repo.isAutoBackupEnabled.value) {
+                    com.metron.app.backup.AutoBackupManager.createAutoBackup(context, repo)
+                }
+                return
             }
-            ACTION_BILL_REMINDER -> {
-                val billName = intent.getStringExtra("bill_name") ?: "Subscription"
-                val amountStr = intent.getStringExtra("amount_str") ?: ""
-                MetronNotificationManager.showBillReminderNotification(context, billName, amountStr)
+
+            val isNotifsEnabled = repo.isNotificationsEnabled.value
+            if (!isNotifsEnabled) return
+
+            when (intent.action) {
+                ACTION_DAILY_REMINDER -> {
+                    MetronNotificationManager.showDailyReminderNotification(context)
+                }
+                ACTION_BILL_REMINDER -> {
+                    val billName = intent.getStringExtra("bill_name") ?: "Subscription"
+                    val amountStr = intent.getStringExtra("amount_str") ?: ""
+                    MetronNotificationManager.showBillReminderNotification(context, billName, amountStr)
+                }
             }
+        } catch (e: Throwable) {
+            e.printStackTrace()
         }
     }
 }

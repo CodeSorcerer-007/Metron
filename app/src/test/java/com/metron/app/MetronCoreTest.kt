@@ -409,4 +409,102 @@ class MetronCoreTest {
         assertTrue(types.contains("INCOME"))
         assertTrue(types.contains("TRANSFER"))
     }
+
+    // ── 8. Offline ML Kit Receipt OCR Heuristics Tests ─────────────────────────────
+
+    @Test
+    fun testReceiptOcrParser_ExtractsTotalAndMerchant() {
+        val sampleReceipt = """
+            Olympus Bakery & Cafe
+            123 Agora Street, Athens
+            Tel: 555-1234
+            Date: 2026-10-02
+            
+            1x Espresso Freddo    3.50
+            1x Spanakopita        5.20
+            
+            Subtotal: 8.70
+            TAX (10%): 0.87
+            GRAND TOTAL: 9.57
+            Thank you for visiting!
+        """.trimIndent()
+
+        val result = com.metron.app.ocr.ReceiptOcrParser.extractDetailsFromVisionText(sampleReceipt)
+        assertEquals("Olympus Bakery & Cafe", result.merchant)
+        assertEquals(9.57, result.amount ?: 0.0, 0.01)
+    }
+
+    @Test
+    fun testReceiptOcrParser_IndianGstReceiptParsing() {
+        val inrReceipt = """
+            TAX INVOICE
+            Blue Tokai Coffee Roasters
+            GSTIN: 29AAAAA0000A1Z5
+            Order #49281
+            Date: 12/04/2026
+            
+            Flat White Coffee     240.00
+            Almond Croissant      180.00
+            
+            TOTAL AMOUNT : ₹420.00
+            Paid via UPI
+        """.trimIndent()
+
+        val result = com.metron.app.ocr.ReceiptOcrParser.extractDetailsFromVisionText(inrReceipt)
+        assertEquals("Blue Tokai Coffee Roasters", result.merchant)
+        assertEquals(420.0, result.amount ?: 0.0, 0.01)
+    }
+
+    // ── 9. Auto-Backup Metadata & LocalBackupItem Tests ─────────────────────────────
+
+    @Test
+    fun testLocalBackupItemFormattedSize() {
+        val smallBackup = com.metron.app.backup.LocalBackupItem(
+            fileName = "metron_autobackup_20261003_120000.json",
+            timestamp = 1727950000000L,
+            sizeBytes = 2048L,
+            file = java.io.File("dummy.json")
+        )
+        assertEquals("2 KB", smallBackup.formattedSize)
+
+        val mediumBackup = com.metron.app.backup.LocalBackupItem(
+            fileName = "metron_autobackup_20261003_130000.json",
+            timestamp = 1727950000000L,
+            sizeBytes = 1572864L, // 1.5 MB
+            file = java.io.File("dummy2.json")
+        )
+        assertEquals("1.5 MB", mediumBackup.formattedSize)
+    }
+
+    // ── 10. Room Architecture Entity & Domain Mappings ─────────────────────────────
+
+    @Test
+    fun testRoomEntityToDomainMapping() {
+        val entity = com.metron.app.data.room.TransactionEntity(
+            id = 42,
+            amount = 750.0,
+            type = "EXPENSE",
+            categoryId = 3,
+            accountId = 1,
+            toAccountId = null,
+            timestamp = 1727950000000L,
+            merchant = "Agora Market",
+            notes = "Olive oil and feta",
+            tag = "Groceries",
+            currency = "EUR",
+            receiptPath = null
+        )
+
+        val domain = com.metron.app.data.room.RoomMappers.toDomain(entity)
+        assertEquals(42L, domain.id)
+        assertEquals(750.0, domain.amount, 0.01)
+        assertEquals(TransactionType.EXPENSE, domain.type)
+        assertEquals("Agora Market", domain.merchant)
+        assertEquals("Groceries", domain.tag)
+
+        val backToEntity = com.metron.app.data.room.RoomMappers.toEntity(domain)
+        assertEquals(entity.id, backToEntity.id)
+        assertEquals(entity.amount, backToEntity.amount, 0.01)
+        assertEquals(entity.type, backToEntity.type)
+    }
 }

@@ -204,7 +204,7 @@ class MetronDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABAS
         val prefs = mapOf(
             "currency_code" to "INR",
             "currency_symbol" to "₹",
-            "theme_mode" to "AEGEAN_DARK",
+            "theme_mode" to "ATHENIAN_LIGHT",
             "calm_mode" to "0",
             "onboarding_completed" to "0", // 0 triggers the first-timer interactive guided tour!
             "haptics_enabled" to "1",
@@ -212,7 +212,8 @@ class MetronDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABAS
             "daily_reminder_hour" to "20",
             "daily_reminder_minute" to "30",
             "bill_reminders_enabled" to "1",
-            "budget_alerts_enabled" to "1"
+            "budget_alerts_enabled" to "1",
+            "auto_backup_enabled" to "1"
         )
         for ((k, v) in prefs) {
             val cv = ContentValues().apply {
