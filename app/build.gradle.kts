@@ -17,7 +17,7 @@ android {
     namespace = "com.metron.app"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.metron.app"
+        applicationId = "com.codesorcerer.metron"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
